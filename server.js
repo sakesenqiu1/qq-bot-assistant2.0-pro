@@ -411,7 +411,15 @@ app.post("/api/admin/shutdown", (req, res) => {
   setTimeout(() => process.exit(0), 300);
 });
 
-Bots.resetStatuses();
+// 启动时自动恢复之前运行中的机器人（服务器重启/更新后无需手动启动）
+(function autoStartBots() {
+  const wasRunning = Bots.all().filter((b) => b.enabled && (b.status === "running" || b.status === "starting"));
+  Bots.resetStatuses();
+  for (const b of wasRunning) {
+    console.log(`自启动机器人：${b.name}`);
+    startBot(b.id).catch((err) => console.log(`自启动失败 ${b.name}：${err?.message}`));
+  }
+})();
 
 // ---------------- 启动（HTTP / HTTPS 自适应） ----------------
 const certDir = path.join(ROOT, "data", "certs");

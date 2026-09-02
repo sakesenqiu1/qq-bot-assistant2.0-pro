@@ -694,7 +694,7 @@ export async function startBot(botId) {
     lastScanAt = now;
     for (const groupId of scanGroups) {
       const entries = audit.getToday(groupId).filter((e) => e.ts >= windowStart && !isReviewed(e.id) && !isPunished(e.id));
-      if (entries.length < 3) continue;
+      if (entries.length < 1) continue;
       const recordText = entries.map((e) => `[${e.t}] ${e.user}: ${e.content}`).join("\n");
       let parsed = null;
       try {
@@ -724,6 +724,7 @@ export async function startBot(botId) {
         if (prev === undefined || durMs > prev.durMs) muted.set(entry.uid, { durMs, ids: [entry.id] });
         else prev.ids.push(entry.id);
       }
+      const results = [];
       for (const [uid, info] of muted) {
         if (!canMute(groupId, uid)) continue;
         const r = await muteMember(groupId, uid, info.durMs);
@@ -733,8 +734,20 @@ export async function startBot(botId) {
         } else {
           log.warn(`主动检查禁言失败：${String(r.reason).slice(0, 100)}`);
         }
+        results.push({ uid, durMs: info.durMs, ...r });
       }
       markReviewed(entries.map((e) => e.id)); // 本次扫描过的消息标记已检查
+      // 给群里一个可见的巡查结果
+      if (results.length > 0) {
+        const lines = ["🔇 定时巡查结果："];
+        for (const r of results) {
+          const name = entries.find((e) => e.uid === r.uid)?.user ?? "未知成员";
+          lines.push(r.ok
+            ? `· ${name}：已禁言 ${Math.round(r.durMs / 60000)} 分钟`
+            : `· ${name}：禁言失败（${String(r.reason).slice(0, 40)}）`);
+        }
+        await safeSend(bot, { scope: "group", targetId: groupId }, lines.join("\n"));
+      }
     }
   }
   if (autoMute.enabled && autoMute.scanIntervalMinutes >= 5) {
