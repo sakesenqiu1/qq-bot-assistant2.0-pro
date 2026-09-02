@@ -45,6 +45,19 @@ function show(view) {
   $("#auth-view").classList.toggle("hidden", view !== "auth");
   $("#dashboard").classList.toggle("hidden", view !== "dash");
 }
+function showUserView() {
+  currentView = "user";
+  $("#user-view").classList.remove("hidden");
+  $("#admin-view").classList.add("hidden");
+  loadBots();
+}
+function showAdminView() {
+  currentView = "admin";
+  $("#user-view").classList.add("hidden");
+  $("#admin-view").classList.remove("hidden");
+  $("#admin-table").innerHTML = '<div class="empty">加载中…</div>';
+  loadAdmin();
+}
 function setMsg(sel, text, ok = false) {
   const el = $(sel);
   el.textContent = text;
@@ -122,16 +135,14 @@ async function enterDashboard() {
   $("#plan-badge").className = "badge " + (me.plan === "free" ? "stopped" : "running");
   $("#btn-admin").classList.toggle("hidden", me.role !== "admin");
   show("dash");
-  currentView = "user";
-  $("#user-view").classList.remove("hidden");
-  $("#admin-view").classList.add("hidden");
-  await loadBots();
+  showUserView();
 }
 
 // ============ 机器人 ============
 async function loadBots() {
   if (currentView !== "user") return;
   bots = await api("/api/bots");
+  if (currentView !== "user") return; // 加载期间已切到后台，不渲染避免闪屏
   const list = $("#bot-list");
   if (bots.length === 0) { list.innerHTML = '<div class="empty">还没有机器人，点击右上角「＋ 新建机器人」开始</div>'; return; }
   list.innerHTML = bots.map(renderCard).join("");
@@ -302,8 +313,8 @@ async function refreshRequireInvite() {
 }
 
 // ============ 后台管理 ============
-$("#btn-admin").onclick = () => { currentView = "admin"; $("#user-view").classList.add("hidden"); $("#admin-view").classList.remove("hidden"); $("#admin-table").innerHTML = '<div class="empty">加载中…</div>'; loadAdmin(); };
-$$(".atab").forEach((t) => (t.onclick = () => { adminTab = t.dataset.v; $$(".atab").forEach((x) => x.classList.toggle("active", x === t)); loadAdmin(); }));
+$("#btn-admin").onclick = () => showAdminView();
+$$(".atab").forEach((t) => (t.onclick = () => { adminTab = t.dataset.v; $$(".atab").forEach((x) => x.classList.toggle("active", x === t)); $("#admin-table").innerHTML = '<div class="empty">加载中…</div>'; loadAdmin(); }));
 
 async function loadAdmin() {
   if (adminTab === "users") return loadAdminUsers();

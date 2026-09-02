@@ -132,7 +132,7 @@ select { width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid #d8d
 .frow > input, .frow > select { flex: 1; padding: 9px 11px; border: 1px solid #d8dee6; border-radius: 8px; font-size: 14px; margin-top: 0 !important; }
 .captcha-box { flex: 1; display: flex; gap: 8px; align-items: center; }
 .captcha-box input { flex: 1; padding: 9px 11px; border: 1px solid #d8dee6; border-radius: 8px; font-size: 14px; margin-top: 0 !important; }
-.captcha-img { height: 42px; width: 130px; flex-shrink: 0; border: 1px solid #d8dee6; border-radius: 8px; cursor: pointer; background: #f5f7fa; }
+.captcha-img { height: 40px; width: 118px; flex-shrink: 0; border: 1px solid #d8dee6; border-radius: 8px; cursor: pointer; background: #f5f7fa; }
 .captcha-box input { min-width: 0; }
 .w100 { width: 100%; }
 .auth-card { width: 440px; }
