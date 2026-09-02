@@ -17,15 +17,15 @@ function cleanup() {
 
 function renderSvg(code) {
   const chars = code.split("");
-  const width = 150;
-  const height = 46;
+  const width = 130;
+  const height = 42;
   let text = "";
   chars.forEach((ch, i) => {
-    const x = 14 + i * 32;
-    const y = 32 + (Math.random() * 4 - 2);
-    const rotate = Math.random() * 24 - 12;
+    const x = 12 + i * 28;
+    const y = 30 + (Math.random() * 4 - 2);
+    const rotate = Math.random() * 20 - 10;
     const color = `hsl(${Math.floor(Math.random() * 360)}, 60%, 45%)`;
-    text += `<text x="${x}" y="${y}" font-size="26" font-family="Arial" font-weight="bold" fill="${color}" transform="rotate(${rotate} ${x} ${y})">${ch}</text>`;
+    text += `<text x="${x}" y="${y}" font-size="22" font-family="Arial" font-weight="bold" fill="${color}" transform="rotate(${rotate} ${x} ${y})">${ch}</text>`;
   });
   let noise = "";
   for (let i = 0; i < 5; i++) {

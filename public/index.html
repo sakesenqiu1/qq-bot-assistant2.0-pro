@@ -20,7 +20,7 @@
       <form id="login-form">
         <div class="frow"><span>用户名</span><input id="login-username" type="text" autocomplete="username" placeholder="请输入用户名"></div>
         <div class="frow"><span>密码</span><input id="login-password" type="password" autocomplete="current-password" placeholder="请输入密码"></div>
-        <div class="frow"><span>验证码</span><div class="captcha-box"><input id="login-captcha" type="text" placeholder="不区分大小写"><img id="login-captcha-img" class="captcha-img" title="点击刷新"></div></div>
+        <div class="frow"><span>验证码</span><div class="captcha-box"><input id="login-captcha" type="text" placeholder="验证码"><img id="login-captcha-img" class="captcha-img" title="点击刷新"></div></div>
         <button type="submit" class="btn primary w100">登录</button>
       </form>
       <p class="links"><a id="btn-forgot">忘记密码？</a></p>
@@ -31,7 +31,7 @@
         <div class="frow"><span>密保问题</span><select id="reg-question"><option>你的小学名称是？</option><option>你的母亲姓名是？</option><option>你的第一只宠物名字？</option><option>你的出生城市是？</option></select></div>
         <div class="frow"><span>密保答案</span><input id="reg-answer" type="text" placeholder="用于找回密码"></div>
         <div class="frow hidden" id="invite-row"><span>邀请码</span><input id="reg-invite" type="text" placeholder="向管理员获取"></div>
-        <div class="frow"><span>验证码</span><div class="captcha-box"><input id="reg-captcha" type="text" placeholder="不区分大小写"><img id="reg-captcha-img" class="captcha-img" title="点击刷新"></div></div>
+        <div class="frow"><span>验证码</span><div class="captcha-box"><input id="reg-captcha" type="text" placeholder="验证码"><img id="reg-captcha-img" class="captcha-img" title="点击刷新"></div></div>
         <button type="submit" class="btn primary w100">注册</button>
       </form>
       <p id="auth-msg" class="msg"></p>
@@ -137,10 +137,10 @@
     <div class="frow"><span>原密码</span><input id="pwd-old" type="password"></div>
     <div class="frow"><span>新密码</span><input id="pwd-new" type="password" placeholder="8~64 位，含字母和数字"></div>
     <button class="btn primary w100" id="pwd-save">更新密码</button>
-    <h4 class="sect">修改密保</h4>
+    <h4 class="sect">修改密保问题/答案</h4>
     <div class="frow"><span>密保问题</span><select id="acc-question"><option>你的小学名称是？</option><option>你的母亲姓名是？</option><option>你的第一只宠物名字？</option><option>你的出生城市是？</option></select></div>
     <div class="frow"><span>密保答案</span><input id="acc-answer" type="text" placeholder="新的密保答案"></div>
-    <button class="btn primary w100" id="acc-sec-save">更新密保</button>
+    <button class="btn primary w100" id="acc-sec-save">更新密保问题/答案</button>
     <p id="pwd-msg" class="msg"></p>
   </div></div>
 
