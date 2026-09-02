@@ -17,13 +17,13 @@ function cleanup() {
 
 function renderSvg(code) {
   const chars = code.split("");
-  const width = 120;
-  const height = 40;
+  const width = 150;
+  const height = 46;
   let text = "";
   chars.forEach((ch, i) => {
-    const x = 18 + i * 24;
-    const y = 28 + (Math.random() * 6 - 3);
-    const rotate = Math.random() * 40 - 20;
+    const x = 14 + i * 32;
+    const y = 32 + (Math.random() * 4 - 2);
+    const rotate = Math.random() * 24 - 12;
     const color = `hsl(${Math.floor(Math.random() * 360)}, 60%, 45%)`;
     text += `<text x="${x}" y="${y}" font-size="26" font-family="Arial" font-weight="bold" fill="${color}" transform="rotate(${rotate} ${x} ${y})">${ch}</text>`;
   });

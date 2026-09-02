@@ -186,6 +186,8 @@ export const Users = {
   updateStatus: (id, status) => db.prepare("UPDATE users SET status = ? WHERE id = ?").run(status, id),
   setPlan: (id, plan, expiresAt) => db.prepare("UPDATE users SET plan = ?, plan_expires_at = ? WHERE id = ?").run(plan, expiresAt ?? 0, id),
   setPassword: (id, passwordHash) => db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, id),
+  updateUsername: (id, username) => db.prepare("UPDATE users SET username = ? WHERE id = ?").run(username, id),
+  setSecurity: (id, question, answerHash) => db.prepare("UPDATE users SET security_question = ?, security_answer_hash = ? WHERE id = ?").run(question, answerHash, id),
 };
 
 // ---------------- 机器人 ----------------

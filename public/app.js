@@ -9,6 +9,7 @@ let bots = [];
 let editingId = null;
 let captcha = { login: {}, reg: {} };
 let adminTab = "users";
+let currentView = "user";
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -121,6 +122,7 @@ async function enterDashboard() {
   $("#plan-badge").className = "badge " + (me.plan === "free" ? "stopped" : "running");
   $("#btn-admin").classList.toggle("hidden", me.role !== "admin");
   show("dash");
+  currentView = "user";
   $("#user-view").classList.remove("hidden");
   $("#admin-view").classList.add("hidden");
   await loadBots();
@@ -128,6 +130,7 @@ async function enterDashboard() {
 
 // ============ 机器人 ============
 async function loadBots() {
+  if (currentView !== "user") return;
   bots = await api("/api/bots");
   const list = $("#bot-list");
   if (bots.length === 0) { list.innerHTML = '<div class="empty">还没有机器人，点击右上角「＋ 新建机器人」开始</div>'; return; }
@@ -265,8 +268,22 @@ $("#m-redeem").onclick = async () => {
 };
 
 // ============ 修改密码 ============
-$("#btn-pwd").onclick = () => { $("#pwd-modal").classList.remove("hidden"); setMsg("#pwd-msg", ""); };
+$("#btn-pwd").onclick = () => { $("#pwd-modal").classList.remove("hidden"); setMsg("#pwd-msg", ""); $("#acc-username").value = me?.username || ""; };
 $("#pwd-close").onclick = () => $("#pwd-modal").classList.add("hidden");
+$("#acc-username-save").onclick = async () => {
+  try {
+    const d = await api("/api/change-username", { method: "POST", body: JSON.stringify({ username: $("#acc-username").value.trim() }) });
+    setMsg("#pwd-msg", "用户名已更新为 " + d.username, true);
+    $("#who").textContent = "👤 " + d.username;
+  } catch (e) { setMsg("#pwd-msg", e.message); }
+};
+$("#acc-sec-save").onclick = async () => {
+  try {
+    await api("/api/change-security", { method: "POST", body: JSON.stringify({ question: $("#acc-question").value, answer: $("#acc-answer").value.trim() }) });
+    setMsg("#pwd-msg", "密保已更新", true);
+    $("#acc-answer").value = "";
+  } catch (e) { setMsg("#pwd-msg", e.message); }
+};
 $("#pwd-save").onclick = async () => {
   try {
     await api("/api/change-password", { method: "POST", body: JSON.stringify({ oldPassword: $("#pwd-old").value, newPassword: $("#pwd-new").value }) });
@@ -285,7 +302,7 @@ async function refreshRequireInvite() {
 }
 
 // ============ 后台管理 ============
-$("#btn-admin").onclick = () => { $("#user-view").classList.add("hidden"); $("#admin-view").classList.remove("hidden"); loadAdmin(); };
+$("#btn-admin").onclick = () => { currentView = "admin"; $("#user-view").classList.add("hidden"); $("#admin-view").classList.remove("hidden"); $("#admin-table").innerHTML = '<div class="empty">加载中…</div>'; loadAdmin(); };
 $$(".atab").forEach((t) => (t.onclick = () => { adminTab = t.dataset.v; $$(".atab").forEach((x) => x.classList.toggle("active", x === t)); loadAdmin(); }));
 
 async function loadAdmin() {
@@ -344,7 +361,7 @@ async function loadAdminInvites() {
     ${invites.map((i) => `<tr>
       <td><code>${esc(i.code)}</code></td><td>${esc(i.note)}</td>
       <td>${i.enabled ? (i.used_at ? "已使用" : "可用") : "已禁用"}</td>
-      <td>${esc(i.used_by || "")}</td><td>${i.used_at ? fmtTime(i.used_at) : "—"}</td>
+      <td>${esc(i.usedByName || "")}</td><td>${i.used_at ? fmtTime(i.used_at) : "—"}</td>
       <td class="opts">
         <button class="btn" onclick="adminToggleInvite('${i.code}')">${i.enabled ? "禁用" : "启用"}</button>
         <button class="btn danger" onclick="adminDelInvite('${i.code}')">删除</button>
@@ -384,7 +401,7 @@ async function loadAdminRedeems() {
       <td>${r.type === "lifetime" ? "买断" : "月卡"}</td>
       <td>${r.type === "lifetime" ? "—" : r.days}</td>
       <td>${r.enabled ? (r.used_at ? "已使用" : "可用") : "已禁用"}</td>
-      <td>${esc(r.used_by || "")}</td><td>${r.used_at ? fmtTime(r.used_at) : "—"}</td>
+      <td>${esc(r.usedByName || "")}</td><td>${r.used_at ? fmtTime(r.used_at) : "—"}</td>
       <td class="opts">
         <button class="btn" onclick="adminToggleRedeem('${r.code}')">${r.enabled ? "禁用" : "启用"}</button>
         <button class="btn danger" onclick="adminDelRedeem('${r.code}')">删除</button>

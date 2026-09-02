@@ -48,7 +48,7 @@
       </div>
       <div class="right">
         <button id="btn-member" class="btn ghost">会员中心</button>
-        <button id="btn-pwd" class="btn ghost">修改密码</button>
+        <button id="btn-pwd" class="btn ghost">账号设置</button>
         <span id="plan-badge" class="badge"></span>
         <span id="who">未登录</span>
         <button id="btn-logout" class="btn ghost">退出登录</button>
@@ -127,12 +127,20 @@
     <p id="m-msg" class="msg"></p>
   </div></div>
 
-  <!-- 修改密码弹窗 -->
+  <!-- 账号设置弹窗 -->
   <div id="pwd-modal" class="modal hidden"><div class="modal-card small">
-    <div class="modal-head"><h3>修改密码</h3><button id="pwd-close" class="btn ghost">✕</button></div>
+    <div class="modal-head"><h3>账号设置</h3><button id="pwd-close" class="btn ghost">✕</button></div>
+    <h4 class="sect">修改用户名</h4>
+    <div class="frow"><span>新用户名</span><input id="acc-username" type="text" placeholder="2~20 位字母/数字/中文"></div>
+    <button class="btn primary w100" id="acc-username-save">更新用户名</button>
+    <h4 class="sect">修改密码</h4>
     <div class="frow"><span>原密码</span><input id="pwd-old" type="password"></div>
     <div class="frow"><span>新密码</span><input id="pwd-new" type="password" placeholder="8~64 位，含字母和数字"></div>
-    <button class="btn primary w100" id="pwd-save">保存</button>
+    <button class="btn primary w100" id="pwd-save">更新密码</button>
+    <h4 class="sect">修改密保</h4>
+    <div class="frow"><span>密保问题</span><select id="acc-question"><option>你的小学名称是？</option><option>你的母亲姓名是？</option><option>你的第一只宠物名字？</option><option>你的出生城市是？</option></select></div>
+    <div class="frow"><span>密保答案</span><input id="acc-answer" type="text" placeholder="新的密保答案"></div>
+    <button class="btn primary w100" id="acc-sec-save">更新密保</button>
     <p id="pwd-msg" class="msg"></p>
   </div></div>
 

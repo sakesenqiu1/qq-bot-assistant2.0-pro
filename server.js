@@ -274,7 +274,9 @@ app.post("/api/admin/users/:id/role", auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/admin/invites", auth, adminOnly, (req, res) => res.json(Invites.listAll()));
+app.get("/api/admin/invites", auth, adminOnly, (req, res) => {
+  res.json(Invites.listAll().map((i) => ({ ...i, usedByName: i.used_by ? (Users.findById(i.used_by)?.username ?? "") : "" })));
+});
 app.post("/api/admin/invites", auth, adminOnly, (req, res) => {
   const count = Math.min(50, Math.max(1, Number(req.body?.count ?? 1) || 1));
   const note = String(req.body?.note ?? "").trim();
@@ -295,6 +297,24 @@ app.post("/api/admin/invites/:code/toggle", auth, adminOnly, (req, res) => {
 app.delete("/api/admin/invites/:code", auth, adminOnly, (req, res) => { Invites.delete(req.params.code); res.json({ ok: true }); });
 
 app.get("/api/info", auth, (req, res) => res.json({ runningBots: runningCount(), version: "0.8.0" }));
+
+// ---------------- 账号设置：改用户名 / 改密码 / 改密保 ----------------
+app.post("/api/change-username", auth, (req, res) => {
+  const username = String(req.body?.username ?? "").trim();
+  if (!/^[\w\u4e00-\u9fa5-]{2,20}$/.test(username)) return res.status(400).json({ error: "用户名需为 2~20 位字母/数字/中文/下划线" });
+  if (Users.findByUsername(username)) return res.status(409).json({ error: "用户名已被占用" });
+  Users.updateUsername(req.user.id, username);
+  res.json({ ok: true, username });
+});
+
+app.post("/api/change-security", auth, (req, res) => {
+  const question = String(req.body?.question ?? "").trim();
+  const answer = String(req.body?.answer ?? "").trim();
+  if (question.length < 2) return res.status(400).json({ error: "请设置密保问题" });
+  if (answer.length < 2) return res.status(400).json({ error: "请设置密保答案" });
+  Users.setSecurity(req.user.id, question, hashPassword(answer));
+  res.json({ ok: true });
+});
 
 // ---------------- 修改密码 ----------------
 app.post("/api/change-password", auth, (req, res) => {
@@ -334,7 +354,9 @@ app.post("/api/redeem", auth, (req, res) => {
 });
 
 // ---------------- 后台：卡密管理 ----------------
-app.get("/api/admin/redeems", auth, adminOnly, (req, res) => res.json(RedeemCodes.listAll()));
+app.get("/api/admin/redeems", auth, adminOnly, (req, res) => {
+  res.json(RedeemCodes.listAll().map((r) => ({ ...r, usedByName: r.used_by ? (Users.findById(r.used_by)?.username ?? "") : "" })));
+});
 app.post("/api/admin/redeems", auth, adminOnly, (req, res) => {
   const count = Math.min(50, Math.max(1, Number(req.body?.count ?? 1) || 1));
   const type = req.body?.type === "lifetime" ? "lifetime" : "monthly";
