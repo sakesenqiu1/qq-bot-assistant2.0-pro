@@ -707,6 +707,7 @@ export async function startBot(botId) {
       // 审查所有"未检查"的消息（不限时间窗口，积压的旧消息也会被清掉），最多 400 条
       const entries = audit.getToday(groupId).filter((e) => !isReviewed(e.id)).slice(-400);
       if (entries.length < 1) continue;
+      log.info(`定时巡查：${groupId} 本次检查 ${entries.length} 条未审消息`);
       const recordText = entries.map((e) => `[${e.t}] ${e.user}: ${e.content}`).join("\n");
       let parsed = null;
       try {
