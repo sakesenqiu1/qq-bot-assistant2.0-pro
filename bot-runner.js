@@ -438,6 +438,11 @@ export async function startBot(botId) {
     Bots.update(botId, { status: "running", lastError: "" });
     log.info("✅ 已连接 QQ 开放平台");
   });
+  bot.on("resumed", () => {
+    running.set(botId, { ...running.get(botId), status: "running", lastError: "" });
+    Bots.update(botId, { status: "running", lastError: "" });
+    log.info("✅ 连接已恢复（RESUME）");
+  });
   bot.on("error", (err) => {
     const msg = String(err?.message ?? err).slice(0, 200);
     log.error("网关错误：" + msg);
@@ -696,7 +701,6 @@ export async function startBot(botId) {
   let lastScanAt = 0;
   let scanTimer = null;
   async function runActiveScan() {
-    if (running.get(botId)?.status !== "running") return;
     const now = Date.now();
     const windowStart = lastScanAt || (now - autoMute.scanIntervalMinutes * 60 * 1000);
     lastScanAt = now;
