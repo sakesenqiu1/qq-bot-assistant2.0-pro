@@ -63,11 +63,14 @@ const DEFAULT_KEYWORDS = [
 
 // ---------------- 自动禁言配置 ----------------
 // 严重罪行定义：色情类、违法/不实信息类（或审查定级「高」）
+// 禁言力度两层：第一层群规（审查 AI 从群规条文换算出 ruleMinutes），第二层档位（倍率缩放）。
+// 群规没写时长时，用下表兜底。
 const MUTE_LEVELS = {
-  light: { seriousMs: 30 * 60 * 1000, generalMs: 0 },        // 轻微：几乎不禁言，仅严重罪行禁言 30 分钟
-  medium: { seriousMs: 60 * 60 * 1000, generalMs: 10 * 60 * 1000 }, // 中等：全部禁言，一般 10 分钟 / 严重 1 小时
-  heavy: { seriousMs: 24 * 60 * 60 * 1000, generalMs: 60 * 60 * 1000 }, // 重度：顶格，一般 1 小时 / 严重 24 小时
+  light: { multiplier: 0.5, seriousMs: 30 * 60 * 1000, generalMs: 0 },        // 轻微：群规时长减半；兜底仅严重罪行禁言 30 分钟
+  medium: { multiplier: 1, seriousMs: 60 * 60 * 1000, generalMs: 10 * 60 * 1000 }, // 中等：按群规执行；兜底一般 10 分钟 / 严重 1 小时
+  heavy: { multiplier: 2, seriousMs: 24 * 60 * 60 * 1000, generalMs: 60 * 60 * 1000 }, // 重度：群规时长翻倍；兜底一般 1 小时 / 严重 24 小时
 };
+const MAX_MUTE_MS = 30 * 24 * 60 * 60 * 1000; // 单次禁言上限 30 天
 const SERIOUS_TYPES = new Set(["色情", "违法/不实信息"]);
 function isSeriousViolation(v) {
   return Boolean(v && (SERIOUS_TYPES.has(v?.type) || v?.severity === "高"));
@@ -86,7 +89,8 @@ const REVIEWER_PROMPT = [
   "- 只报告证据确凿的违规，模棱两可的不算",
   "- evidence 必须逐字照抄消息原文，不得改写、概括或省略，不超过 30 字",
   "- 输出必须是 JSON，格式：",
-  '{"violations":[{"type":"色情","user":"昵称","evidence":"原话摘要","severity":"高"}],"summary":"一句话总结"}',
+  '{"violations":[{"type":"色情","user":"昵称","evidence":"原话摘要","severity":"高","ruleMinutes":30}],"summary":"一句话总结"}',
+  "- ruleMinutes：按群规换算出的该违规禁言时长（分钟）。群规写明时长的（如「禁言1-24小时」「最高可处禁言2日」），取与情节相称的数值，例如「1-24小时」按情节在 60~1440 之间取值，「最高可处禁言12小时」一般取一半左右；群规只写「禁止/严禁」没写时长的，一般违规填 10、严重违规填 60；群规完全没有涉及该类违规或群规为空时，省略 ruleMinutes 字段。禁止凭空编造群规里不存在的时长",
   '- 没有违规时输出 {"violations":[],"summary":"今日群内未发现违规内容"}',
 ].join("\n");
 
@@ -322,9 +326,19 @@ export async function startBot(botId) {
       return n >= 5 && n <= 1440 ? n : 10;
     })(),
   };
-  function muteDurationMs(isSerious) {
+  function muteDurationMs(itemOrSerious) {
+    const item = itemOrSerious && typeof itemOrSerious === "object" ? itemOrSerious : null;
+    const isSerious = typeof itemOrSerious === "boolean" ? itemOrSerious : isSeriousViolation(itemOrSerious);
     const lv = MUTE_LEVELS[autoMute.level] ?? MUTE_LEVELS.light;
-    return isSerious ? lv.seriousMs : lv.generalMs;
+    const ruleMin = Number(item?.ruleMinutes);
+    let minutes;
+    if (Number.isFinite(ruleMin) && ruleMin > 0) {
+      minutes = ruleMin * lv.multiplier; // 第一层：群规时长 × 第二层：档位倍率
+    } else {
+      minutes = (isSerious ? lv.seriousMs : lv.generalMs) / 60000; // 群规没写时长：按档位兜底
+    }
+    minutes = Math.max(1, Math.round(minutes));
+    return Math.min(minutes * 60000, MAX_MUTE_MS);
   }
   function formatExpire(durationMs) {
     const d = new Date(Date.now() + durationMs + 8 * 3600 * 1000); // RFC3339，东八区
@@ -632,7 +646,7 @@ export async function startBot(botId) {
         const entry = findEntryByEvidence(recent, item?.evidence);
         if (!entry || !entry.uid) continue;
         if (isPunished(entry.id)) continue; // 该条言论已被处罚过，不再重复禁言
-        const durMs = muteDurationMs(isSeriousViolation(item));
+        const durMs = muteDurationMs(item);
         if (durMs <= 0) continue;
         const prev = muted.get(entry.uid);
         if (prev === undefined || durMs > prev.durMs) muted.set(entry.uid, { durMs, ids: [entry.id] });
@@ -740,7 +754,7 @@ export async function startBot(botId) {
       for (const item of parsed.violations) {
         const entry = findEntryByEvidence(entries, item?.evidence);
         if (!entry || !entry.uid) continue;
-        const durMs = muteDurationMs(isSeriousViolation(item));
+        const durMs = muteDurationMs(item);
         if (durMs <= 0) continue;
         const prev = muted.get(entry.uid);
         if (prev === undefined || durMs > prev.durMs) muted.set(entry.uid, { durMs, ids: [entry.id] });

@@ -96,9 +96,9 @@
         <label class="inline"><input name="autoRebuke" type="checkbox" checked> 关键词自动注意</label>
         <label>违规触发关键词（逗号分隔）<input name="keywords" type="text" placeholder="色情,黄图,约炮,裸聊,福利姬,性交,无码,艳照,色图,淫秽"></label>
         <label class="inline"><input name="autoMuteEnabled" type="checkbox"> 自动禁言（按力度禁言违规者）</label>
-        <label>禁言力度<select name="muteLevel"><option value="light">轻微 —— 仅严重罪行禁言 30 分钟</option><option value="medium">中等 —— 一般 10 分钟 / 严重 1 小时</option><option value="heavy">重度 —— 一般 1 小时 / 严重 24 小时</option></select></label>
+        <label>禁言力度<select name="muteLevel"><option value="light">轻微 —— 群规时长减半</option><option value="medium">中等 —— 按群规时长执行</option><option value="heavy">重度 —— 群规时长翻倍</option></select></label>
         <label>主动检查间隔（分钟，5~1440）<input name="scanInterval" type="number" min="5" max="1440" value="10"></label>
-        <div class="hint">严重罪行定义：色情类、违法/不实信息类违规（审查定级「高」）。机器人需群管理员身份才能禁言。</div>
+        <div class="hint">禁言时长两层计算：群规时长 × 档位倍率（轻×0.5 / 中×1 / 重×2）；群规没写时长的按档位默认（一般 10 分钟、色情/违法 1 小时）。机器人需群管理员身份才能禁言。</div>
         <label class="inline"><input name="enabled" type="checkbox" checked> 启用该机器人</label>
         <div class="modal-foot"><button type="submit" class="btn primary">保存</button><button type="button" id="modal-cancel" class="btn ghost">取消</button></div>
       </form>
