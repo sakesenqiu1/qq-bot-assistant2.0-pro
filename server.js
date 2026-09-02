@@ -9,7 +9,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  Users, Bots, Sessions, Invites, PLANS,
+  Users, Bots, Sessions, Invites, RedeemCodes, Settings, PLANS,
   hashPassword, verifyPassword, genId,
 } from "./store.js";
 import { startBot, stopBot, runningCount, defaultBotRecord } from "./bot-runner.js";
@@ -77,9 +77,12 @@ app.post("/api/register", (req, res) => {
   if (Users.findByUsername(username)) return res.status(409).json({ error: "用户名已存在" });
 
   const userCount = Users.count();
-  if (userCount > 0) {
+  const requireInvite = userCount > 0 && Settings.get("require_invite") === "1";
+  let inviteToConsume = null;
+  if (userCount > 0 && (requireInvite || inviteCode)) {
     const invite = Invites.find(inviteCode);
     if (!invite || !invite.enabled || invite.used_at > 0) return res.status(400).json({ error: "邀请码无效或已被使用" });
+    inviteToConsume = invite.code;
   }
   if (securityQuestion.length < 2) return res.status(400).json({ error: "请设置密保问题" });
   if (securityAnswer.length < 2) return res.status(400).json({ error: "请设置密保答案" });
@@ -90,7 +93,7 @@ app.post("/api/register", (req, res) => {
     role: isFirstUser ? "admin" : "user", status: "active", plan: "free", planExpiresAt: 0,
     securityQuestion, securityAnswerHash: hashPassword(securityAnswer),
   });
-  if (userCount > 0) Invites.consume(inviteCode, user.id);
+  if (inviteToConsume) Invites.consume(inviteToConsume, user.id);
   const token = Sessions.create(user.id);
   res.json({ token, username: user.username, role: user.role });
 });
@@ -293,6 +296,65 @@ app.delete("/api/admin/invites/:code", auth, adminOnly, (req, res) => { Invites.
 
 app.get("/api/info", auth, (req, res) => res.json({ runningBots: runningCount(), version: "0.8.0" }));
 
+// ---------------- 修改密码 ----------------
+app.post("/api/change-password", auth, (req, res) => {
+  const oldPassword = String(req.body?.oldPassword ?? "");
+  const newPassword = String(req.body?.newPassword ?? "");
+  if (!verifyPassword(oldPassword, req.user.password_hash)) return res.status(400).json({ error: "原密码错误" });
+  const pwErr = passwordStrength(newPassword);
+  if (pwErr) return res.status(400).json({ error: pwErr });
+  Users.setPassword(req.user.id, hashPassword(newPassword));
+  res.json({ ok: true });
+});
+
+// ---------------- 系统设置（邀请码开关） ----------------
+app.get("/api/settings/public", (req, res) => res.json({ requireInvite: Settings.get("require_invite") === "1" }));
+app.get("/api/admin/settings", auth, adminOnly, (req, res) => res.json({ requireInvite: Settings.get("require_invite") === "1" }));
+app.post("/api/admin/settings", auth, adminOnly, (req, res) => {
+  Settings.set("require_invite", req.body?.requireInvite ? "1" : "0");
+  res.json({ ok: true });
+});
+
+// ---------------- 充值卡密（用户自助开通会员） ----------------
+app.post("/api/redeem", auth, (req, res) => {
+  const code = String(req.body?.code ?? "").trim().toUpperCase();
+  const rc = RedeemCodes.find(code);
+  if (!rc || !rc.enabled || rc.used_at > 0) return res.status(400).json({ error: "卡密无效或已被使用" });
+  let plan = rc.type;
+  let expiresAt = 0;
+  if (rc.type === "monthly") {
+    const base = Math.max(Number(req.user.plan_expires_at) || 0, Date.now());
+    expiresAt = base + Number(rc.days || 30) * 24 * 3600 * 1000;
+  } else if (rc.type === "lifetime") {
+    plan = "lifetime";
+  }
+  Users.setPlan(req.user.id, plan, expiresAt);
+  RedeemCodes.consume(code, req.user.id);
+  res.json({ ok: true, plan, expiresAt });
+});
+
+// ---------------- 后台：卡密管理 ----------------
+app.get("/api/admin/redeems", auth, adminOnly, (req, res) => res.json(RedeemCodes.listAll()));
+app.post("/api/admin/redeems", auth, adminOnly, (req, res) => {
+  const count = Math.min(50, Math.max(1, Number(req.body?.count ?? 1) || 1));
+  const type = req.body?.type === "lifetime" ? "lifetime" : "monthly";
+  const days = Number(req.body?.days ?? 30) || 30;
+  const created = [];
+  for (let i = 0; i < count; i++) {
+    const code = "R" + crypto.randomBytes(4).toString("hex").toUpperCase();
+    RedeemCodes.create(code, type, days);
+    created.push(code);
+  }
+  res.json({ created });
+});
+app.post("/api/admin/redeems/:code/toggle", auth, adminOnly, (req, res) => {
+  const rc = RedeemCodes.find(req.params.code);
+  if (!rc) return res.status(404).json({ error: "卡密不存在" });
+  RedeemCodes.setEnabled(req.params.code, rc.enabled ? 0 : 1);
+  res.json({ ok: true });
+});
+app.delete("/api/admin/redeems/:code", auth, adminOnly, (req, res) => { RedeemCodes.delete(req.params.code); res.json({ ok: true }); });
+
 // ---------------- 管理员引导 ----------------
 function ensureAdmin() {
   mkdirSync(path.join(ROOT, "data"), { recursive: true });
@@ -307,9 +369,8 @@ function ensureAdmin() {
   } else {
     Users.create({ id: genId(), username, passwordHash: pwHash, createdAt: Date.now(), role: "admin", status: "active", plan: "lifetime", planExpiresAt: 0, securityQuestion: "", securityAnswerHash: "" });
   }
-  const msg = `管理员账号已创建/重置：用户名 admin，初始密码 ${password}（仅显示一次，请登录后立即修改）`;
+  const msg = `管理员账号已创建/重置：用户名 admin，初始密码 ${password}（登录后请在「修改密码」中更换；可在日志中查看）`;
   console.log("⚠️ " + msg);
-  try { writeFileSync(path.join(ROOT, "data", "initial-admin.txt"), msg + "\n", "utf8"); } catch {}
 }
 ensureAdmin();
 

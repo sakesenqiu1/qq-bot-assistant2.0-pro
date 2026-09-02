@@ -17,37 +17,22 @@
         <button id="tab-register" class="tab">注册</button>
       </div>
 
-      <!-- 登录表单 -->
       <form id="login-form">
-        <label>用户名<input id="login-username" type="text" autocomplete="username"></label>
-        <label>密码<input id="login-password" type="password" autocomplete="current-password"></label>
-        <div class="captcha-row">
-          <input id="login-captcha" type="text" placeholder="验证码">
-          <img id="login-captcha-img" class="captcha-img" title="点击刷新" alt="验证码">
-        </div>
-        <button type="submit" class="btn primary">登录</button>
+        <div class="frow"><span>用户名</span><input id="login-username" type="text" autocomplete="username" placeholder="请输入用户名"></div>
+        <div class="frow"><span>密码</span><input id="login-password" type="password" autocomplete="current-password" placeholder="请输入密码"></div>
+        <div class="frow"><span>验证码</span><div class="captcha-box"><input id="login-captcha" type="text" placeholder="不区分大小写"><img id="login-captcha-img" class="captcha-img" title="点击刷新"></div></div>
+        <button type="submit" class="btn primary w100">登录</button>
       </form>
       <p class="links"><a id="btn-forgot">忘记密码？</a></p>
 
-      <!-- 注册表单 -->
       <form id="register-form" class="hidden">
-        <label>用户名<input id="reg-username" type="text" placeholder="2~20 位字母/数字/中文"></label>
-        <label>密码<input id="reg-password" type="password" placeholder="8~64 位，需包含字母和数字"></label>
-        <label>密保问题
-          <select id="reg-question">
-            <option value="你的小学名称是？">你的小学名称是？</option>
-            <option value="你的母亲姓名是？">你的母亲姓名是？</option>
-            <option value="你的第一只宠物名字？">你的第一只宠物名字？</option>
-            <option value="你的出生城市是？">你的出生城市是？</option>
-          </select>
-        </label>
-        <label>密保答案<input id="reg-answer" type="text" placeholder="用于找回密码"></label>
-        <label>邀请码<input id="reg-invite" type="text" placeholder="向管理员获取"></label>
-        <div class="captcha-row">
-          <input id="reg-captcha" type="text" placeholder="验证码">
-          <img id="reg-captcha-img" class="captcha-img" title="点击刷新" alt="验证码">
-        </div>
-        <button type="submit" class="btn primary">注册</button>
+        <div class="frow"><span>用户名</span><input id="reg-username" type="text" placeholder="2~20 位字母/数字/中文"></div>
+        <div class="frow"><span>密码</span><input id="reg-password" type="password" placeholder="8~64 位，含字母和数字"></div>
+        <div class="frow"><span>密保问题</span><select id="reg-question"><option>你的小学名称是？</option><option>你的母亲姓名是？</option><option>你的第一只宠物名字？</option><option>你的出生城市是？</option></select></div>
+        <div class="frow"><span>密保答案</span><input id="reg-answer" type="text" placeholder="用于找回密码"></div>
+        <div class="frow hidden" id="invite-row"><span>邀请码</span><input id="reg-invite" type="text" placeholder="向管理员获取"></div>
+        <div class="frow"><span>验证码</span><div class="captcha-box"><input id="reg-captcha" type="text" placeholder="不区分大小写"><img id="reg-captcha-img" class="captcha-img" title="点击刷新"></div></div>
+        <button type="submit" class="btn primary w100">注册</button>
       </form>
       <p id="auth-msg" class="msg"></p>
     </div>
@@ -62,6 +47,8 @@
         <button id="btn-admin" class="btn ghost hidden">后台管理</button>
       </div>
       <div class="right">
+        <button id="btn-member" class="btn ghost">会员中心</button>
+        <button id="btn-pwd" class="btn ghost">修改密码</button>
         <span id="plan-badge" class="badge"></span>
         <span id="who">未登录</span>
         <button id="btn-logout" class="btn ghost">退出登录</button>
@@ -69,20 +56,18 @@
     </header>
     <main>
       <div id="user-view">
-        <div class="toolbar">
-          <h2>我的机器人</h2>
-          <button id="btn-new" class="btn primary">＋ 新建机器人</button>
-        </div>
+        <div class="toolbar"><h2>我的机器人</h2><button id="btn-new" class="btn primary">＋ 新建机器人</button></div>
         <div id="bot-list" class="bot-list"></div>
       </div>
 
-      <!-- 后台管理 -->
       <div id="admin-view" class="hidden">
         <div class="stat-cards" id="stat-cards"></div>
         <div class="admin-tabs">
           <button class="atab active" data-v="users">用户管理</button>
           <button class="atab" data-v="bots">机器人管理</button>
-          <button class="atab" data-v="invites">邀请码管理</button>
+          <button class="atab" data-v="invites">邀请码</button>
+          <button class="atab" data-v="redeems">充值卡密</button>
+          <button class="atab" data-v="settings">系统设置</button>
         </div>
         <div id="admin-table" class="admin-table"></div>
       </div>
@@ -111,60 +96,61 @@
         <label class="inline"><input name="autoRebuke" type="checkbox" checked> 关键词自动注意</label>
         <label>违规触发关键词（逗号分隔）<input name="keywords" type="text" placeholder="色情,黄图,约炮,裸聊,福利姬,性交,无码,艳照,色图,淫秽"></label>
         <label class="inline"><input name="autoMuteEnabled" type="checkbox"> 自动禁言（按力度禁言违规者）</label>
-        <label>禁言力度
-          <select name="muteLevel">
-            <option value="light">轻微 —— 仅严重罪行禁言 30 分钟</option>
-            <option value="medium">中等 —— 一般 10 分钟 / 严重 1 小时</option>
-            <option value="heavy">重度 —— 一般 1 小时 / 严重 24 小时</option>
-          </select>
-        </label>
+        <label>禁言力度<select name="muteLevel"><option value="light">轻微 —— 仅严重罪行禁言 30 分钟</option><option value="medium">中等 —— 一般 10 分钟 / 严重 1 小时</option><option value="heavy">重度 —— 一般 1 小时 / 严重 24 小时</option></select></label>
         <label>主动检查间隔（分钟，5~1440）<input name="scanInterval" type="number" min="5" max="1440" value="10"></label>
         <div class="hint">严重罪行定义：色情类、违法/不实信息类违规（审查定级「高」）。机器人需群管理员身份才能禁言。</div>
         <label class="inline"><input name="enabled" type="checkbox" checked> 启用该机器人</label>
-        <div class="modal-foot">
-          <button type="submit" class="btn primary">保存</button>
-          <button type="button" id="modal-cancel" class="btn ghost">取消</button>
-        </div>
+        <div class="modal-foot"><button type="submit" class="btn primary">保存</button><button type="button" id="modal-cancel" class="btn ghost">取消</button></div>
       </form>
     </div>
   </div>
 
   <!-- 使用说明弹窗 -->
-  <div id="help-modal" class="modal hidden">
-    <div class="modal-card">
-      <div class="modal-head"><h3>使用说明</h3><button id="help-close" class="btn ghost">✕</button></div>
-      <div class="help-content">
-        <h4>一、注册与登录</h4>
-        <p>注册需要管理员提供的邀请码；请牢记密保答案（用于找回密码）；密码需 8~64 位且包含字母和数字；每次登录需输入验证码。</p>
-        <h4>二、创建机器人</h4>
-        <p>点击「＋ 新建机器人」，填写：QQ AppID / AppSecret（到 q.qq.com 注册机器人获取）、AI 接口地址与 Key（DeepSeek 等）、人设与规定。</p>
-        <h4>三、与机器人聊天</h4>
-        <p>手机 QQ 私聊机器人直接对话；群里 @机器人 对话。支持指令：/帮助 /重置 /人格 /模型 /ping /查违规 /群分析。</p>
-        <h4>四、群规审查与自动禁言</h4>
-        <p>群规审查里可开启：关键词自动注意、自动禁言（三级力度）、主动检查（定时巡查）。/查违规 会按你写的「机器人规定」优先判定。</p>
-        <h4>五、会员</h4>
-        <p>免费版 1 个机器人；月卡 5 个；买断不限量。会员由管理员在后台发放。</p>
-      </div>
+  <div id="help-modal" class="modal hidden"><div class="modal-card">
+    <div class="modal-head"><h3>使用说明</h3><button id="help-close" class="btn ghost">✕</button></div>
+    <div class="help-content">
+      <h4>一、注册与登录</h4><p>注册需填写用户名、密码（8~64 位含字母数字）、密保问题和答案；登录需输入验证码。忘记密码可用密保找回。</p>
+      <h4>二、创建机器人</h4><p>点击「＋ 新建机器人」，填写 QQ AppID / AppSecret（q.qq.com 注册机器人获取）、AI 接口地址与 Key、人设与规定。</p>
+      <h4>三、与机器人聊天</h4><p>私聊直接对话；群里 @机器人 对话。指令：/帮助 /重置 /人格 /模型 /ping /查违规 /群分析。</p>
+      <h4>四、群规审查与自动禁言</h4><p>可开启关键词自动注意、自动禁言（三级力度）、主动检查。/查违规 按你写的「机器人规定」优先判定。</p>
+      <h4>五、会员</h4><p>免费版 1 个机器人；月卡 5 个；买断不限量。在「会员中心」输入充值卡密即可自动开通。</p>
     </div>
-  </div>
+  </div></div>
+
+  <!-- 会员中心弹窗 -->
+  <div id="member-modal" class="modal hidden"><div class="modal-card small">
+    <div class="modal-head"><h3>会员中心</h3><button id="member-close" class="btn ghost">✕</button></div>
+    <p class="mline">当前会员：<b id="m-plan"></b></p>
+    <p class="mline" id="m-expire"></p>
+    <div class="frow"><span>充值卡密</span><input id="m-code" type="text" placeholder="输入卡密自动开通会员"></div>
+    <button class="btn primary w100" id="m-redeem">立即开通</button>
+    <p id="m-msg" class="msg"></p>
+  </div></div>
+
+  <!-- 修改密码弹窗 -->
+  <div id="pwd-modal" class="modal hidden"><div class="modal-card small">
+    <div class="modal-head"><h3>修改密码</h3><button id="pwd-close" class="btn ghost">✕</button></div>
+    <div class="frow"><span>原密码</span><input id="pwd-old" type="password"></div>
+    <div class="frow"><span>新密码</span><input id="pwd-new" type="password" placeholder="8~64 位，含字母和数字"></div>
+    <button class="btn primary w100" id="pwd-save">保存</button>
+    <p id="pwd-msg" class="msg"></p>
+  </div></div>
 
   <!-- 找回密码弹窗 -->
-  <div id="forgot-modal" class="modal hidden">
-    <div class="modal-card small">
-      <div class="modal-head"><h3>找回密码</h3><button id="forgot-close" class="btn ghost">✕</button></div>
-      <div id="forgot-step1">
-        <label>用户名<input id="f-username" type="text"></label>
-        <button class="btn primary" id="f-next">下一步</button>
-      </div>
-      <div id="forgot-step2" class="hidden">
-        <p id="f-question" class="qline"></p>
-        <label>密保答案<input id="f-answer" type="text"></label>
-        <label>新密码<input id="f-newpw" type="password" placeholder="8~64 位，含字母和数字"></label>
-        <button class="btn primary" id="f-reset">重置密码</button>
-      </div>
-      <p id="forgot-msg" class="msg"></p>
+  <div id="forgot-modal" class="modal hidden"><div class="modal-card small">
+    <div class="modal-head"><h3>找回密码</h3><button id="forgot-close" class="btn ghost">✕</button></div>
+    <div id="forgot-step1">
+      <div class="frow"><span>用户名</span><input id="f-username" type="text"></div>
+      <button class="btn primary w100" id="f-next">下一步</button>
     </div>
-  </div>
+    <div id="forgot-step2" class="hidden">
+      <p id="f-question" class="qline"></p>
+      <div class="frow"><span>密保答案</span><input id="f-answer" type="text"></div>
+      <div class="frow"><span>新密码</span><input id="f-newpw" type="password" placeholder="8~64 位，含字母和数字"></div>
+      <button class="btn primary w100" id="f-reset">重置密码</button>
+    </div>
+    <p id="forgot-msg" class="msg"></p>
+  </div></div>
 
   <script src="app.js"></script>
 </body>

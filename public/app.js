@@ -246,6 +246,44 @@ $("#bot-form").onsubmit = async (e) => {
 $("#btn-help").onclick = () => $("#help-modal").classList.remove("hidden");
 $("#help-close").onclick = () => $("#help-modal").classList.add("hidden");
 
+// ============ 会员中心 ============
+$("#btn-member").onclick = async () => {
+  $("#member-modal").classList.remove("hidden");
+  setMsg("#m-msg", "");
+  const m = await api("/api/me");
+  $("#m-plan").textContent = PLAN_NAME[m.plan] || "免费版";
+  $("#m-expire").textContent = m.plan === "monthly" ? "到期时间：" + fmtTime(m.planExpiresAt) : "";
+};
+$("#member-close").onclick = () => $("#member-modal").classList.add("hidden");
+$("#m-redeem").onclick = async () => {
+  try {
+    const d = await api("/api/redeem", { method: "POST", body: JSON.stringify({ code: $("#m-code").value.trim() }) });
+    setMsg("#m-msg", "开通成功！当前会员：" + PLAN_NAME[d.plan], true);
+    $("#m-code").value = "";
+    await enterDashboard();
+  } catch (e) { setMsg("#m-msg", e.message); }
+};
+
+// ============ 修改密码 ============
+$("#btn-pwd").onclick = () => { $("#pwd-modal").classList.remove("hidden"); setMsg("#pwd-msg", ""); };
+$("#pwd-close").onclick = () => $("#pwd-modal").classList.add("hidden");
+$("#pwd-save").onclick = async () => {
+  try {
+    await api("/api/change-password", { method: "POST", body: JSON.stringify({ oldPassword: $("#pwd-old").value, newPassword: $("#pwd-new").value }) });
+    setMsg("#pwd-msg", "密码已修改", true);
+    $("#pwd-old").value = ""; $("#pwd-new").value = "";
+  } catch (e) { setMsg("#pwd-msg", e.message); }
+};
+
+// ============ 邀请码开关（注册页） ============
+async function refreshRequireInvite() {
+  try {
+    const d = await (await fetch("/api/settings/public")).json();
+    $("#invite-row").classList.toggle("hidden", !d.requireInvite);
+    $("#reg-invite").required = d.requireInvite;
+  } catch {}
+}
+
 // ============ 后台管理 ============
 $("#btn-admin").onclick = () => { $("#user-view").classList.add("hidden"); $("#admin-view").classList.remove("hidden"); loadAdmin(); };
 $$(".atab").forEach((t) => (t.onclick = () => { adminTab = t.dataset.v; $$(".atab").forEach((x) => x.classList.toggle("active", x === t)); loadAdmin(); }));
@@ -254,6 +292,8 @@ async function loadAdmin() {
   if (adminTab === "users") return loadAdminUsers();
   if (adminTab === "bots") return loadAdminBots();
   if (adminTab === "invites") return loadAdminInvites();
+  if (adminTab === "redeems") return loadAdminRedeems();
+  if (adminTab === "settings") return loadAdminSettings();
 }
 async function loadAdminStats() {
   const s = await api("/api/admin/stats");
@@ -328,11 +368,55 @@ window.adminPlan = async (id, plan) => {
 window.adminStatus = async (id, status) => { try { await api(`/api/admin/users/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }); loadAdminUsers(); } catch (e) { alert(e.message); } };
 window.adminToggleInvite = async (code) => { try { await api(`/api/admin/invites/${code}/toggle`, { method: "POST" }); loadAdminInvites(); } catch (e) { alert(e.message); } };
 window.adminDelInvite = async (code) => { if (confirm("删除该邀请码？")) { try { await api(`/api/admin/invites/${code}`, { method: "DELETE" }); loadAdminInvites(); } catch (e) { alert(e.message); } } };
+async function loadAdminRedeems() {
+  await loadAdminStats();
+  const list = await api("/api/admin/redeems");
+  $("#admin-table").innerHTML = `
+    <div class="invite-gen">
+      <input id="rc-count" type="number" value="5" min="1" max="50"> 个
+      <select id="rc-type"><option value="monthly">月卡</option><option value="lifetime">买断</option></select>
+      <input id="rc-days" type="number" value="30" min="1"> 天（月卡有效）
+      <button class="btn primary" id="rc-gen-btn">生成卡密</button>
+    </div>
+    <table><thead><tr><th>卡密</th><th>类型</th><th>天数</th><th>状态</th><th>使用者</th><th>使用时间</th><th>操作</th></tr></thead><tbody>
+    ${list.map((r) => `<tr>
+      <td><code>${esc(r.code)}</code></td>
+      <td>${r.type === "lifetime" ? "买断" : "月卡"}</td>
+      <td>${r.type === "lifetime" ? "—" : r.days}</td>
+      <td>${r.enabled ? (r.used_at ? "已使用" : "可用") : "已禁用"}</td>
+      <td>${esc(r.used_by || "")}</td><td>${r.used_at ? fmtTime(r.used_at) : "—"}</td>
+      <td class="opts">
+        <button class="btn" onclick="adminToggleRedeem('${r.code}')">${r.enabled ? "禁用" : "启用"}</button>
+        <button class="btn danger" onclick="adminDelRedeem('${r.code}')">删除</button>
+      </td></tr>`).join("")}</tbody></table>`;
+  $("#rc-gen-btn").onclick = async () => {
+    try {
+      const d = await api("/api/admin/redeems", { method: "POST", body: JSON.stringify({ count: Number($("#rc-count").value) || 1, type: $("#rc-type").value, days: Number($("#rc-days").value) || 30 }) });
+      alert("已生成充值卡密：\n" + d.created.join("\n"));
+      loadAdminRedeems();
+    } catch (e) { alert(e.message); }
+  };
+}
+async function loadAdminSettings() {
+  await loadAdminStats();
+  const d = await api("/api/admin/settings");
+  $("#admin-table").innerHTML = `
+    <div class="setting-row"><span>强制邀请码注册（关闭则注册无需邀请码）</span>
+      <input type="checkbox" id="set-invite" ${d.requireInvite ? "checked" : ""}>
+      <button class="btn primary" id="set-save">保存</button></div>`;
+  $("#set-save").onclick = async () => {
+    try { await api("/api/admin/settings", { method: "POST", body: JSON.stringify({ requireInvite: $("#set-invite").checked }) }); alert("已保存"); loadAdminSettings(); } catch (e) { alert(e.message); }
+  };
+}
+window.adminToggleRedeem = async (code) => { try { await api(`/api/admin/redeems/${code}/toggle`, { method: "POST" }); loadAdminRedeems(); } catch (e) { alert(e.message); } };
+window.adminDelRedeem = async (code) => { if (confirm("删除该卡密？")) { try { await api(`/api/admin/redeems/${code}`, { method: "DELETE" }); loadAdminRedeems(); } catch (e) { alert(e.message); } } };
+
 window.adminDelBot = async (id, name) => { if (confirm("删除机器人「" + name + "」？")) { try { await api(`/api/bots/${id}`, { method: "DELETE" }); loadAdminBots(); } catch (e) { alert(e.message); } } };
 
 // ============ 启动 ============
 (async () => {
   await Promise.all([loadCaptcha("login"), loadCaptcha("reg")]);
+  await refreshRequireInvite();
   if (token) { try { await enterDashboard(); return; } catch { token = ""; localStorage.removeItem(TOKEN_KEY); } }
   show("auth"); switchTab(true);
 })();

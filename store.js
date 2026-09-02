@@ -65,6 +65,21 @@ CREATE TABLE IF NOT EXISTS invites (
   created_at INTEGER NOT NULL
 );
 `);
+db.exec(`
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS redeem_codes (
+  code TEXT PRIMARY KEY,
+  type TEXT NOT NULL DEFAULT 'monthly',
+  days INTEGER NOT NULL DEFAULT 30,
+  used_by TEXT NOT NULL DEFAULT '',
+  used_at INTEGER NOT NULL DEFAULT 0,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+);
+`);
 
 // ---- 兼容旧库：补列 ----
 for (const [col, def] of [
@@ -243,4 +258,23 @@ export const Invites = {
   setEnabled: (code, enabled) => db.prepare("UPDATE invites SET enabled = ? WHERE code = ?").run(enabled ? 1 : 0, code),
   consume: (code, userId) => db.prepare("UPDATE invites SET used_by = ?, used_at = ? WHERE code = ?").run(userId, Date.now(), code),
   delete: (code) => db.prepare("DELETE FROM invites WHERE code = ?").run(code),
+};
+
+// ---------------- 系统设置 ----------------
+export const Settings = {
+  get: (key) => db.prepare("SELECT value FROM settings WHERE key = ?").get(key)?.value ?? "",
+  set: (key, value) => db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, String(value)),
+};
+
+// ---------------- 充值卡密（自动开通会员） ----------------
+export const RedeemCodes = {
+  create: (code, type, days) => {
+    db.prepare("INSERT OR IGNORE INTO redeem_codes (code, type, days, created_at) VALUES (?, ?, ?, ?)").run(code, type, days ?? 30, Date.now());
+    return RedeemCodes.find(code);
+  },
+  find: (code) => db.prepare("SELECT * FROM redeem_codes WHERE code = ?").get(code) ?? null,
+  listAll: () => db.prepare("SELECT * FROM redeem_codes ORDER BY created_at DESC").all(),
+  setEnabled: (code, enabled) => db.prepare("UPDATE redeem_codes SET enabled = ? WHERE code = ?").run(enabled ? 1 : 0, code),
+  consume: (code, userId) => db.prepare("UPDATE redeem_codes SET used_by = ?, used_at = ? WHERE code = ?").run(userId, Date.now(), code),
+  delete: (code) => db.prepare("DELETE FROM redeem_codes WHERE code = ?").run(code),
 };

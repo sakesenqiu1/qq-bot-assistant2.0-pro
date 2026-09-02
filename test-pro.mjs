@@ -1,5 +1,5 @@
 // 付费版全套流程测试（管理员由启动时自动创建，密码在 data/initial-admin.txt）
-import { readFileSync } from "node:fs";
+
 const BASE = process.env.BASE || "http://127.0.0.1:3000";
 let token = "";
 
@@ -19,11 +19,8 @@ async function getCaptcha() {
   return { id: d.id, code: chars };
 }
 
-// 读自动管理员密码
-const adminTxt = readFileSync("data/initial-admin.txt", "utf8");
-const m = adminTxt.match(/初始密码 ([0-9a-f]+)/);
-if (!m) throw new Error("未找到管理员初始密码");
-const adminPass = m[1];
+const adminPass = process.env.ADMIN_PASS;
+if (!adminPass) throw new Error("请设置环境变量 ADMIN_PASS 为管理员初始密码");
 console.log("管理员: admin /", adminPass);
 
 // 1) 管理员登录

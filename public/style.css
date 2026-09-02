@@ -126,3 +126,24 @@ select { width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid #d8d
 .modal-card.small { width: 420px; }
 .qline { font-size: 13px; color: #2563eb; margin-bottom: 10px; }
 #forgot-step1 button, #forgot-step2 button { margin-top: 10px; width: 100%; }
+/* ---- v0.8 UI 优化 ---- */
+.frow { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.frow > span { flex: 0 0 72px; font-size: 13px; color: #4b5563; text-align: right; }
+.frow > input, .frow > select { flex: 1; padding: 9px 11px; border: 1px solid #d8dee6; border-radius: 8px; font-size: 14px; margin-top: 0 !important; }
+.captcha-box { flex: 1; display: flex; gap: 8px; align-items: center; }
+.captcha-box input { flex: 1; padding: 9px 11px; border: 1px solid #d8dee6; border-radius: 8px; font-size: 14px; margin-top: 0 !important; }
+.captcha-img { height: 40px; width: 110px; border: 1px solid #d8dee6; border-radius: 8px; cursor: pointer; background: #f5f7fa; }
+.w100 { width: 100%; }
+.auth-card { width: 420px; }
+.auth-card form label { margin-bottom: 0; }
+.mline { font-size: 14px; color: #4b5563; margin-bottom: 10px; }
+.mline b { color: #2563eb; }
+/* 后台表格按钮：紧凑不换行 */
+.admin-table .opts { display: flex; gap: 6px; }
+.admin-table .opts .btn, .admin-table .btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+/* 邀请码/卡密生成区 */
+.invite-gen { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.invite-gen input, .invite-gen select { padding: 8px 10px; border: 1px solid #d8dee6; border-radius: 8px; }
+.invite-gen input:first-child { width: 70px; }
+.setting-row { display: flex; align-items: center; gap: 10px; padding: 14px; }
+.setting-row span { font-size: 14px; color: #24292f; }
