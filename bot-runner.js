@@ -37,7 +37,24 @@ const DEFAULT_PERSONA = [
   "- 不闲聊、不卖萌、不玩梗，涉及群管理事务认真处理",
   "- 有人询问管理规定时，结合「机器人规定」内容回答",
   "- 始终使用中文，除非对方用其他语言",
+  "- 回复请使用纯文本，不要使用 Markdown 格式（不要用 #、**、列表符号等）",
 ].join("\n");
+
+// 把 AI 输出的 Markdown 转成 QQ 友好的纯文本
+function toPlainText(s) {
+  return String(s ?? "")
+    .replace(/```[\s\S]*?```/g, (m) => m.replace(/^```[^\n]*\n?/, "").replace(/```$/, "").trim())
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^>\s?/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "· ")
+    .replace(/^\s*\d+[.、)]\s+/gm, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 const DEFAULT_KEYWORDS = [
   "色情", "黄图", "黄片", "黄站", "约炮", "嫖娼", "卖淫", "裸聊", "福利姬", "性交", "无码",
@@ -426,7 +443,7 @@ export async function startBot(botId) {
       await safeSend(bot, target, "AI 服务暂时不可用，请稍后再试。");
       return;
     }
-    reply = String(reply ?? "").trim();
+    reply = toPlainText(reply);
     if (!reply) return;
     memory.push(key, "user", text);
     memory.push(key, "assistant", reply);
@@ -699,7 +716,7 @@ export async function startBot(botId) {
       "2. 群风与氛围评价",
       "3. 潜在风险与违规苗头",
       "4. 结合群规给出 3~5 条具体、可执行的管理建议",
-      "要求：语气与你的角色一致；分点简洁；建议必须贴合本群的「机器人规定」，不要泛泛而谈。",
+      "要求：语气与你的角色一致；分点简洁；建议必须贴合本群的「机器人规定」，不要泛泛而谈；输出请使用纯文本，不要用 Markdown 格式。",
     ].join("\n");
 
     let reply;
@@ -716,7 +733,7 @@ export async function startBot(botId) {
       await safeSend(bot, target, "分析服务出错了，请稍后再试。");
       return;
     }
-    const textOut = String(reply ?? "").trim();
+    const textOut = toPlainText(reply);
     if (!textOut) {
       await safeSend(bot, target, "没分析出内容，换个时间再试试。");
       return;
