@@ -259,6 +259,54 @@ export async function startBot(botId) {
     return Boolean(id) && punishedMap.has(id);
   }
 
+  // 已检查账本：审查过的消息打标记，下次只查没查过的新消息（保留 3 天）
+  const reviewedFile = path.join(ROOT, "data", "reviews", botId + ".json");
+  const reviewedMap = new Map(); // 条目id -> 检查时间
+  try {
+    if (existsSync(reviewedFile)) {
+      const arr = JSON.parse(readFileSync(reviewedFile, "utf8"));
+      const cutoff = Date.now() - 3 * 24 * 3600 * 1000;
+      for (const item of arr ?? []) {
+        if (item && item.id && item.ts >= cutoff) reviewedMap.set(String(item.id), item.ts);
+      }
+    }
+  } catch {}
+  let reviewedDirty = false;
+  let reviewedTimer = null;
+  function saveReviewed() {
+    if (!reviewedDirty) return;
+    const cutoff = Date.now() - 3 * 24 * 3600 * 1000;
+    for (const [id, ts] of reviewedMap) if (ts < cutoff) reviewedMap.delete(id);
+    try {
+      mkdirSync(path.dirname(reviewedFile), { recursive: true });
+      writeFileSync(reviewedFile, JSON.stringify([...reviewedMap].map(([id, ts]) => ({ id, ts }))), "utf8");
+      reviewedDirty = false;
+    } catch (err) {
+      log.warn("保存已检查记录失败：" + err?.message);
+    }
+  }
+  function scheduleReviewedSave() {
+    if (reviewedTimer) clearTimeout(reviewedTimer);
+    reviewedTimer = setTimeout(() => saveReviewed(), 1500);
+    reviewedTimer.unref?.();
+  }
+  function markReviewed(ids) {
+    let changed = false;
+    for (const id of ids) {
+      if (id && !reviewedMap.has(id)) {
+        reviewedMap.set(id, Date.now());
+        changed = true;
+      }
+    }
+    if (changed) {
+      reviewedDirty = true;
+      scheduleReviewedSave();
+    }
+  }
+  function isReviewed(id) {
+    return Boolean(id) && reviewedMap.has(id);
+  }
+
   const llm = new LlmClient(record.llm ?? {}, log);
   const bot = new QQBot({ appId: record.qq.appId, appSecret: record.qq.appSecret, logger: log });
   const systemPrompt = buildSystemPrompt(record);
@@ -524,14 +572,20 @@ export async function startBot(botId) {
     }
     lastCheckAt.set(groupId, now);
 
-    const entries = audit.getToday(groupId);
-    if (entries.length === 0) {
+    const allEntries = audit.getToday(groupId);
+    if (allEntries.length === 0) {
       await safeSend(bot, target, "📋 今天还没有收到任何群消息记录。\n（注：未开通全量消息时只能看到 @机器人 的消息）");
       return;
     }
-    const recent = entries.slice(-400);
+    // 只检查尚未检查过的新消息
+    const unchecked = allEntries.filter((e) => !isReviewed(e.id));
+    if (unchecked.length === 0) {
+      await safeSend(bot, target, "📋 今天没有新消息需要检查，之前的都已检查过了。");
+      return;
+    }
+    const recent = unchecked.slice(-400);
     const recordText = recent.map((e) => `[${e.t}] ${e.user}: ${e.content}`).join("\n");
-    await safeSend(bot, target, `🔍 正在审查今天的 ${entries.length} 条群消息记录，稍等…`);
+    await safeSend(bot, target, `🔍 正在检查 ${recent.length} 条新消息（今日已收录 ${allEntries.length} 条），稍等…`);
 
     let verdict;
     let parsedVerdict = null;
@@ -539,7 +593,7 @@ export async function startBot(botId) {
       verdict = await llm.chat(
         [
           { role: "system", content: reviewSystemPrompt },
-          { role: "user", content: `以下是今天的群聊消息记录（${recent.length} 条）：\n${recordText}` },
+          { role: "user", content: `以下是群聊中尚未检查过的消息记录（${recent.length} 条）：\n${recordText}` },
         ],
         { signal: ctx.signal },
       );
@@ -554,12 +608,15 @@ export async function startBot(botId) {
       return;
     }
 
-    // 自动禁言：按力度对违规者执行
+    // 本次检查过的消息全部标记，下次不再重复检查
+    markReviewed(recent.map((e) => e.id));
+
+    // 自动禁言：按力度对本次新发现的违规者执行
     const muteResults = [];
     if (autoMute.enabled && parsedVerdict && Array.isArray(parsedVerdict.violations) && parsedVerdict.violations.length > 0) {
       const muted = new Map(); // uid -> { durMs, ids }（同一人取最长，记录涉及的条目）
       for (const item of parsedVerdict.violations) {
-        const entry = findEntryByEvidence(entries, item?.evidence);
+        const entry = findEntryByEvidence(recent, item?.evidence);
         if (!entry || !entry.uid) continue;
         if (isPunished(entry.id)) continue; // 该条言论已被处罚过，不再重复禁言
         const durMs = muteDurationMs(isSeriousViolation(item));
@@ -571,11 +628,11 @@ export async function startBot(botId) {
       for (const [uid, info] of muted) {
         if (!canMute(groupId, uid)) continue; // 60 秒冷却，防并发重复
         const r = await muteMember(groupId, uid, info.durMs);
-        if (r.ok) markPunishedForUser(uid, entries); // 该人今日截至现在的发言全部结清
+        if (r.ok) markPunishedForUser(uid, recent); // 本次该人的发言结清
         muteResults.push({ uid, durMs: info.durMs, ...r });
       }
     }
-    const report = renderReport(verdict, entries.length, groupId, muteResults, entries);
+    const report = renderReport(verdict, recent.length, groupId, muteResults, recent);
     for (const chunk of splitLongText(report, 2000)) {
       if (ctx.signal?.aborted) break;
       await safeSend(bot, target, chunk);
@@ -592,7 +649,7 @@ export async function startBot(botId) {
     const time = new Date().toLocaleString("zh-CN", { hour12: false });
     const lines = [];
     lines.push("📋 今日群规检查报告");
-    lines.push(`⏱ 检查时间：${time}　收录消息：${totalCount} 条`);
+    lines.push(`⏱ 检查时间：${time}　本次检查新消息：${totalCount} 条`);
     lines.push("——————————");
     if (parsed && Array.isArray(parsed.violations)) {
       const v = parsed.violations;
@@ -636,7 +693,7 @@ export async function startBot(botId) {
     const windowStart = lastScanAt || (now - autoMute.scanIntervalMinutes * 60 * 1000);
     lastScanAt = now;
     for (const groupId of scanGroups) {
-      const entries = audit.getToday(groupId).filter((e) => e.ts >= windowStart && !isPunished(e.id));
+      const entries = audit.getToday(groupId).filter((e) => e.ts >= windowStart && !isReviewed(e.id) && !isPunished(e.id));
       if (entries.length < 3) continue;
       const recordText = entries.map((e) => `[${e.t}] ${e.user}: ${e.content}`).join("\n");
       let parsed = null;
@@ -653,7 +710,10 @@ export async function startBot(botId) {
       } catch {
         continue;
       }
-      if (!parsed || !Array.isArray(parsed.violations) || parsed.violations.length === 0) continue;
+      if (!parsed || !Array.isArray(parsed.violations) || parsed.violations.length === 0) {
+        markReviewed(entries.map((e) => e.id)); // 无违规也要标记为已检查
+        continue;
+      }
       const muted = new Map();
       for (const item of parsed.violations) {
         const entry = findEntryByEvidence(entries, item?.evidence);
@@ -674,6 +734,7 @@ export async function startBot(botId) {
           log.warn(`主动检查禁言失败：${String(r.reason).slice(0, 100)}`);
         }
       }
+      markReviewed(entries.map((e) => e.id)); // 本次扫描过的消息标记已检查
     }
   }
   if (autoMute.enabled && autoMute.scanIntervalMinutes >= 5) {
@@ -744,7 +805,7 @@ export async function startBot(botId) {
     }
   }
 
-  running.set(botId, { instance: bot, memory, llm, audit, scanTimer, savePunished, status: "starting", lastError: "" });
+  running.set(botId, { instance: bot, memory, llm, audit, scanTimer, savePunished, saveReviewed, status: "starting", lastError: "" });
   Bots.update(botId, { status: "starting", lastError: "" });
 
   bot.start().catch((err) => {
@@ -768,6 +829,7 @@ export async function stopBot(botId) {
   entry.memory?.flush();
   entry.audit?.flush();
   entry.savePunished?.();
+  entry.saveReviewed?.();
   running.delete(botId);
   Bots.update(botId, { status: "stopped", lastError: "" });
   return { status: "stopped" };
