@@ -702,10 +702,10 @@ export async function startBot(botId) {
   let scanTimer = null;
   async function runActiveScan() {
     const now = Date.now();
-    const windowStart = lastScanAt || (now - autoMute.scanIntervalMinutes * 60 * 1000);
     lastScanAt = now;
     for (const groupId of scanGroups) {
-      const entries = audit.getToday(groupId).filter((e) => e.ts >= windowStart && !isReviewed(e.id) && !isPunished(e.id));
+      // 审查所有"未检查"的消息（不限时间窗口，积压的旧消息也会被清掉），最多 400 条
+      const entries = audit.getToday(groupId).filter((e) => !isReviewed(e.id)).slice(-400);
       if (entries.length < 1) continue;
       const recordText = entries.map((e) => `[${e.t}] ${e.user}: ${e.content}`).join("\n");
       let parsed = null;
@@ -889,4 +889,12 @@ export function getStatus(botId) {
 
 export function runningCount() {
   return running.size;
+}
+
+/** 停止所有运行中的机器人（用于服务退出时统一落盘） */
+export async function stopAllBots() {
+  const ids = [...running.keys()];
+  for (const id of ids) {
+    await stopBot(id);
+  }
 }
