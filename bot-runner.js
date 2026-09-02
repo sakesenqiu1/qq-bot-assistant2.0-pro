@@ -720,10 +720,19 @@ export async function startBot(botId) {
         const jm = String(verdict ?? "").match(/\{[\s\S]*\}/);
         if (jm) parsed = JSON.parse(jm[0]);
       } catch {
-        continue;
+        continue; // 审查出错：不标记、不报，下次重试
       }
-      if (!parsed || !Array.isArray(parsed.violations) || parsed.violations.length === 0) {
-        markReviewed(entries.map((e) => e.id)); // 无违规也要标记为已检查
+      if (!parsed || !Array.isArray(parsed.violations)) {
+        continue; // 审查结果异常：不标记、不报，下次重试
+      }
+      // 无违规：也要报平安
+      if (parsed.violations.length === 0) {
+        markReviewed(entries.map((e) => e.id));
+        await safeSend(
+          bot,
+          { scope: "group", targetId: groupId },
+          `🔍 定时巡查报告\n本次检查：${entries.length} 条新消息\n结果：未发现违规，群风良好 ✅`,
+        );
         continue;
       }
       const muted = new Map();
@@ -749,17 +758,23 @@ export async function startBot(botId) {
         results.push({ uid, durMs: info.durMs, ...r });
       }
       markReviewed(entries.map((e) => e.id)); // 本次扫描过的消息标记已检查
-      // 给群里一个可见的巡查结果
+      // 每次巡查都报一次结果（有违规）
+      const lines = ["🔍 定时巡查报告"];
+      lines.push(`本次检查：${entries.length} 条新消息`);
+      lines.push(`发现 ${parsed.violations.length} 条疑似违规：`);
+      parsed.violations.forEach((item, i) => {
+        lines.push(`${i + 1}.【${item?.type ?? "违规"}·${item?.severity ?? "中"}】${item?.user ?? "未知"}：「${String(item?.evidence ?? "").slice(0, 30)}」`);
+      });
       if (results.length > 0) {
-        const lines = ["🔇 定时巡查结果："];
+        lines.push("禁言执行：");
         for (const r of results) {
           const name = entries.find((e) => e.uid === r.uid)?.user ?? "未知成员";
           lines.push(r.ok
             ? `· ${name}：已禁言 ${Math.round(r.durMs / 60000)} 分钟`
             : `· ${name}：禁言失败（${String(r.reason).slice(0, 40)}）`);
         }
-        await safeSend(bot, { scope: "group", targetId: groupId }, lines.join("\n"));
       }
+      await safeSend(bot, { scope: "group", targetId: groupId }, lines.join("\n"));
     }
   }
   if (autoMute.enabled && autoMute.scanIntervalMinutes >= 5) {
