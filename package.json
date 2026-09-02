@@ -1,0 +1,17 @@
+{
+  "name": "qq-bot-assistant-pro",
+  "version": "0.8.0",
+  "description": "QQ 机器人托管平台（付费版）：多用户 + 会员(月卡/买断) + 邀请码 + 验证码 + 后台管理 + AI聊天/群规审查/自动禁言/主动检查",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-api.mjs"
+  },
+  "dependencies": {
+    "@tencent-connect/qqbot-nodejs": "^1.0.4",
+    "express": "^4.21.2"
+  },
+  "license": "MIT"
+}

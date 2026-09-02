@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QQ 机器人托管平台</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 登录/注册 -->
+  <div id="auth-view" class="auth-wrap hidden">
+    <div class="auth-card">
+      <h1>QQ 机器人托管平台</h1>
+      <p class="sub">注册后管理你自己的 QQ 机器人</p>
+      <div class="tabs">
+        <button id="tab-login" class="tab active">登录</button>
+        <button id="tab-register" class="tab">注册</button>
+      </div>
+
+      <!-- 登录表单 -->
+      <form id="login-form">
+        <label>用户名<input id="login-username" type="text" autocomplete="username"></label>
+        <label>密码<input id="login-password" type="password" autocomplete="current-password"></label>
+        <div class="captcha-row">
+          <input id="login-captcha" type="text" placeholder="验证码">
+          <img id="login-captcha-img" class="captcha-img" title="点击刷新" alt="验证码">
+        </div>
+        <button type="submit" class="btn primary">登录</button>
+      </form>
+      <p class="links"><a id="btn-forgot">忘记密码？</a></p>
+
+      <!-- 注册表单 -->
+      <form id="register-form" class="hidden">
+        <label>用户名<input id="reg-username" type="text" placeholder="2~20 位字母/数字/中文"></label>
+        <label>密码<input id="reg-password" type="password" placeholder="8~64 位，需包含字母和数字"></label>
+        <label>密保问题
+          <select id="reg-question">
+            <option value="你的小学名称是？">你的小学名称是？</option>
+            <option value="你的母亲姓名是？">你的母亲姓名是？</option>
+            <option value="你的第一只宠物名字？">你的第一只宠物名字？</option>
+            <option value="你的出生城市是？">你的出生城市是？</option>
+          </select>
+        </label>
+        <label>密保答案<input id="reg-answer" type="text" placeholder="用于找回密码"></label>
+        <label>邀请码<input id="reg-invite" type="text" placeholder="向管理员获取"></label>
+        <div class="captcha-row">
+          <input id="reg-captcha" type="text" placeholder="验证码">
+          <img id="reg-captcha-img" class="captcha-img" title="点击刷新" alt="验证码">
+        </div>
+        <button type="submit" class="btn primary">注册</button>
+      </form>
+      <p id="auth-msg" class="msg"></p>
+    </div>
+  </div>
+
+  <!-- 主面板 -->
+  <div id="dashboard" class="dashboard hidden">
+    <header>
+      <div class="left">
+        <div class="brand">QQ 机器人托管平台</div>
+        <button id="btn-help" class="btn ghost">使用说明</button>
+        <button id="btn-admin" class="btn ghost hidden">后台管理</button>
+      </div>
+      <div class="right">
+        <span id="plan-badge" class="badge"></span>
+        <span id="who">未登录</span>
+        <button id="btn-logout" class="btn ghost">退出登录</button>
+      </div>
+    </header>
+    <main>
+      <div id="user-view">
+        <div class="toolbar">
+          <h2>我的机器人</h2>
+          <button id="btn-new" class="btn primary">＋ 新建机器人</button>
+        </div>
+        <div id="bot-list" class="bot-list"></div>
+      </div>
+
+      <!-- 后台管理 -->
+      <div id="admin-view" class="hidden">
+        <div class="stat-cards" id="stat-cards"></div>
+        <div class="admin-tabs">
+          <button class="atab active" data-v="users">用户管理</button>
+          <button class="atab" data-v="bots">机器人管理</button>
+          <button class="atab" data-v="invites">邀请码管理</button>
+        </div>
+        <div id="admin-table" class="admin-table"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 机器人弹窗 -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h3 id="modal-title">新建机器人</h3><button id="modal-close" class="btn ghost">✕</button></div>
+      <form id="bot-form">
+        <div class="grid2">
+          <label>机器人名字<input name="name" type="text" placeholder="如：管理助手" required></label>
+          <label>QQ AppID（机器人ID）<input name="appId" type="text" placeholder="q.qq.com 开发设置里获取"></label>
+          <label>QQ AppSecret（机器人密钥）<input name="appSecret" type="password" placeholder="不填 = 保持原值"></label>
+          <label>AI 接口地址<input name="baseUrl" type="text" placeholder="https://api.deepseek.com"></label>
+          <label>AI API Key<input name="apiKey" type="password" placeholder="sk-..."></label>
+          <label>AI 模型<input name="model" type="text" placeholder="deepseek-chat"></label>
+        </div>
+        <label>机器人人设（角色提示词）<textarea name="persona" rows="5"></textarea></label>
+        <label>机器人规定（群规，AI 会严格遵守）<textarea name="rules" rows="4"></textarea></label>
+        <div class="field-label">特殊词语法（触发词 → 动作）</div>
+        <div id="words-list"></div>
+        <button type="button" id="btn-add-word" class="btn ghost">＋ 添加触发词</button>
+        <div class="field-label">群规审查</div>
+        <label class="inline"><input name="autoRebuke" type="checkbox" checked> 关键词自动注意</label>
+        <label>违规触发关键词（逗号分隔）<input name="keywords" type="text" placeholder="色情,黄图,约炮,裸聊,福利姬,性交,无码,艳照,色图,淫秽"></label>
+        <label class="inline"><input name="autoMuteEnabled" type="checkbox"> 自动禁言（按力度禁言违规者）</label>
+        <label>禁言力度
+          <select name="muteLevel">
+            <option value="light">轻微 —— 仅严重罪行禁言 30 分钟</option>
+            <option value="medium">中等 —— 一般 10 分钟 / 严重 1 小时</option>
+            <option value="heavy">重度 —— 一般 1 小时 / 严重 24 小时</option>
+          </select>
+        </label>
+        <label>主动检查间隔（分钟，5~1440）<input name="scanInterval" type="number" min="5" max="1440" value="10"></label>
+        <div class="hint">严重罪行定义：色情类、违法/不实信息类违规（审查定级「高」）。机器人需群管理员身份才能禁言。</div>
+        <label class="inline"><input name="enabled" type="checkbox" checked> 启用该机器人</label>
+        <div class="modal-foot">
+          <button type="submit" class="btn primary">保存</button>
+          <button type="button" id="modal-cancel" class="btn ghost">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 使用说明弹窗 -->
+  <div id="help-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h3>使用说明</h3><button id="help-close" class="btn ghost">✕</button></div>
+      <div class="help-content">
+        <h4>一、注册与登录</h4>
+        <p>注册需要管理员提供的邀请码；请牢记密保答案（用于找回密码）；密码需 8~64 位且包含字母和数字；每次登录需输入验证码。</p>
+        <h4>二、创建机器人</h4>
+        <p>点击「＋ 新建机器人」，填写：QQ AppID / AppSecret（到 q.qq.com 注册机器人获取）、AI 接口地址与 Key（DeepSeek 等）、人设与规定。</p>
+        <h4>三、与机器人聊天</h4>
+        <p>手机 QQ 私聊机器人直接对话；群里 @机器人 对话。支持指令：/帮助 /重置 /人格 /模型 /ping /查违规 /群分析。</p>
+        <h4>四、群规审查与自动禁言</h4>
+        <p>群规审查里可开启：关键词自动注意、自动禁言（三级力度）、主动检查（定时巡查）。/查违规 会按你写的「机器人规定」优先判定。</p>
+        <h4>五、会员</h4>
+        <p>免费版 1 个机器人；月卡 5 个；买断不限量。会员由管理员在后台发放。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 找回密码弹窗 -->
+  <div id="forgot-modal" class="modal hidden">
+    <div class="modal-card small">
+      <div class="modal-head"><h3>找回密码</h3><button id="forgot-close" class="btn ghost">✕</button></div>
+      <div id="forgot-step1">
+        <label>用户名<input id="f-username" type="text"></label>
+        <button class="btn primary" id="f-next">下一步</button>
+      </div>
+      <div id="forgot-step2" class="hidden">
+        <p id="f-question" class="qline"></p>
+        <label>密保答案<input id="f-answer" type="text"></label>
+        <label>新密码<input id="f-newpw" type="password" placeholder="8~64 位，含字母和数字"></label>
+        <button class="btn primary" id="f-reset">重置密码</button>
+      </div>
+      <p id="forgot-msg" class="msg"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

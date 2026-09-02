@@ -1,0 +1,17 @@
+[Unit]
+Description=QQ Bot Platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__APP_DIR__
+ExecStart=/usr/local/bin/node server.js
+Environment=PORT=3000
+Restart=always
+RestartSec=5
+StandardOutput=append:__APP_DIR__/data/bot.log
+StandardError=append:__APP_DIR__/data/bot.log
+
+[Install]
+WantedBy=multi-user.target

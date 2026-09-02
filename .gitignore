@@ -1,0 +1,9 @@
+# 依赖
+node_modules/
+.npm-cache/
+
+# 本地数据与密钥（数据库、主密钥、管理密钥、HTTPS 证书一律不入库）
+data/
+
+# 日志
+*.log
