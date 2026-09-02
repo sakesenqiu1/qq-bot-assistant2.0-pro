@@ -175,6 +175,17 @@ function matchPornKeywords(moderation, content) {
   return keywords.some((kw) => text.includes(String(kw).toLowerCase()));
 }
 
+// 巡查/查违规用的违禁词硬匹配：只要命中关键词就算违规，不受 AI 判断影响
+function matchScanKeywords(moderation, content) {
+  const keywords = Array.isArray(moderation?.keywords) ? moderation.keywords : [];
+  if (keywords.length === 0) return false;
+  const text = String(content ?? "").toLowerCase();
+  return keywords.some((kw) => {
+    const k = String(kw).trim().toLowerCase();
+    return k.length > 0 && text.includes(k);
+  });
+}
+
 async function safeSend(bot, target, content) {
   try {
     await bot.sendText(target, content);
@@ -638,12 +649,32 @@ export async function startBot(botId) {
     // 本次检查过的消息全部标记，下次不再重复检查
     markReviewed(recent.map((e) => e.id));
 
-    // 自动禁言：按力度对本次新发现的违规者执行
-    const muteResults = [];
-    if (autoMute.enabled && parsedVerdict && Array.isArray(parsedVerdict.violations) && parsedVerdict.violations.length > 0) {
-      const muted = new Map(); // uid -> { durMs, ids }（同一人取最长，记录涉及的条目）
+    // 违禁关键词硬匹配：命中即违规（不依赖 AI）
+    const kwVios = [];
+    for (const e of recent) {
+      if (!matchScanKeywords(moderation, e.content)) continue;
+      kwVios.push({ type: "违禁词", user: e.user, evidence: String(e.content ?? "").slice(0, 30), severity: "高", entryId: e.id });
+    }
+
+    // 合并违规：关键词硬判定 + AI 判定（按条目去重）
+    const seenEntry = new Set(kwVios.map((v) => v.entryId));
+    const allVios = [...kwVios];
+    if (parsedVerdict && Array.isArray(parsedVerdict.violations)) {
       for (const item of parsedVerdict.violations) {
         const entry = findEntryByEvidence(recent, item?.evidence);
+        if (!entry) continue;
+        if (seenEntry.has(entry.id)) continue;
+        seenEntry.add(entry.id);
+        allVios.push(item);
+      }
+    }
+
+    // 自动禁言：按力度对本次新发现的违规者执行
+    const muteResults = [];
+    if (autoMute.enabled) {
+      const muted = new Map(); // uid -> { durMs, ids }（同一人取最长，记录涉及的条目）
+      for (const item of allVios) {
+        const entry = item.entryId ? recent.find((e) => e.id === item.entryId) : findEntryByEvidence(recent, item?.evidence);
         if (!entry || !entry.uid) continue;
         if (isPunished(entry.id)) continue; // 该条言论已被处罚过，不再重复禁言
         const durMs = muteDurationMs(item);
@@ -659,7 +690,11 @@ export async function startBot(botId) {
         muteResults.push({ uid, durMs: info.durMs, ...r });
       }
     }
-    const report = renderReport(verdict, recent.length, groupId, muteResults, recent);
+    let report = renderReport(verdict, recent.length, groupId, muteResults, recent);
+    if (kwVios.length > 0) {
+      const kwLines = kwVios.map((v, i) => `${i + 1}.【违禁词·高】${v.user}：「${v.evidence}」`).join("\n");
+      report = `⚠️ 违禁词命中（硬判定，不依赖 AI）：\n${kwLines}\n\n${report}`;
+    }
     for (const chunk of splitLongText(report, 2000)) {
       if (ctx.signal?.aborted) break;
       await safeSend(bot, target, chunk);
@@ -722,6 +757,12 @@ export async function startBot(botId) {
       const entries = audit.getToday(groupId).filter((e) => !isReviewed(e.id)).slice(-400);
       if (entries.length < 1) continue;
       log.info(`定时巡查：${groupId} 本次检查 ${entries.length} 条未审消息`);
+      // 违禁关键词硬匹配：命中即违规，不等 AI 判断
+      const kwVios = [];
+      for (const e of entries) {
+        if (!matchScanKeywords(moderation, e.content)) continue;
+        kwVios.push({ type: "违禁词", user: e.user, evidence: String(e.content ?? "").slice(0, 30), severity: "高", entryId: e.id });
+      }
       const recordText = entries.map((e) => `[${e.t}] ${e.user}: ${e.content}`).join("\n");
       let parsed = null;
       try {
@@ -735,13 +776,22 @@ export async function startBot(botId) {
         const jm = String(verdict ?? "").match(/\{[\s\S]*\}/);
         if (jm) parsed = JSON.parse(jm[0]);
       } catch {
-        continue; // 审查出错：不标记、不报，下次重试
+        if (kwVios.length === 0) continue; // 审查出错且无关键词命中：不标记，下次重试
       }
-      if (!parsed || !Array.isArray(parsed.violations)) {
-        continue; // 审查结果异常：不标记、不报，下次重试
+      // 合并违规：关键词硬判定 + AI 判定（按条目去重）
+      const seenEntry = new Set(kwVios.map((v) => v.entryId));
+      const allVios = [...kwVios];
+      if (parsed && Array.isArray(parsed.violations)) {
+        for (const item of parsed.violations) {
+          const entry = findEntryByEvidence(entries, item?.evidence);
+          if (!entry) continue;
+          if (seenEntry.has(entry.id)) continue;
+          seenEntry.add(entry.id);
+          allVios.push(item);
+        }
       }
       // 无违规：也要报平安
-      if (parsed.violations.length === 0) {
+      if (allVios.length === 0) {
         markReviewed(entries.map((e) => e.id));
         await safeSend(
           bot,
@@ -751,8 +801,8 @@ export async function startBot(botId) {
         continue;
       }
       const muted = new Map();
-      for (const item of parsed.violations) {
-        const entry = findEntryByEvidence(entries, item?.evidence);
+      for (const item of allVios) {
+        const entry = item.entryId ? entries.find((e) => e.id === item.entryId) : findEntryByEvidence(entries, item?.evidence);
         if (!entry || !entry.uid) continue;
         const durMs = muteDurationMs(item);
         if (durMs <= 0) continue;
@@ -776,8 +826,8 @@ export async function startBot(botId) {
       // 每次巡查都报一次结果（有违规）
       const lines = ["🔍 定时巡查报告"];
       lines.push(`本次检查：${entries.length} 条新消息`);
-      lines.push(`发现 ${parsed.violations.length} 条疑似违规：`);
-      parsed.violations.forEach((item, i) => {
+      lines.push(`发现 ${allVios.length} 条违规：`);
+      allVios.forEach((item, i) => {
         lines.push(`${i + 1}.【${item?.type ?? "违规"}·${item?.severity ?? "中"}】${item?.user ?? "未知"}：「${String(item?.evidence ?? "").slice(0, 30)}」`);
       });
       if (results.length > 0) {
