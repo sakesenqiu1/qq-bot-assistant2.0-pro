@@ -111,6 +111,7 @@ const BARE_COMMAND_WORDS = new Set([
   "persona", "人格", "人设",
   "model", "模型",
   "ping",
+  "xuncha", "巡查", "巡查状态",
   "check", "查违规", "违规检查", "群规检查", "公示",
   "analysis", "分析", "群分析", "建议", "群建议",
 ]);
@@ -375,6 +376,7 @@ export async function startBot(botId) {
     "/模型   查看当前 AI 模型",
     "/ping   检查机器人状态",
     "/查违规 审查今天群内消息并公示（仅群聊）",
+    "/巡查   查看定时巡查状态（仅群聊）",
     "/群分析 结合人设与群规分析今日群聊，给出管理建议（仅群聊）",
     "提示：指令不带 / 也能用，直接发「查违规」即可",
   ].join("\n");
@@ -533,6 +535,12 @@ export async function startBot(botId) {
       }
       case "ping": {
         await safeSend(bot, msg.replyTarget, "🟢 机器人运行正常！");
+        return true;
+      }
+      case "xuncha":
+      case "巡查":
+      case "巡查状态": {
+        await runScanStatus(ctx, msg);
         return true;
       }
       case "check":
@@ -730,9 +738,9 @@ export async function startBot(botId) {
         const r = await muteMember(groupId, uid, info.durMs);
         if (r.ok) {
           markPunishedForUser(uid, entries);
-          log.info(`主动检查：已禁言 ${uid} ${Math.round(info.durMs / 60000)} 分钟`);
+          log.info(`定时巡查：已禁言 ${uid} ${Math.round(info.durMs / 60000)} 分钟`);
         } else {
-          log.warn(`主动检查禁言失败：${String(r.reason).slice(0, 100)}`);
+          log.warn(`定时巡查禁言失败：${String(r.reason).slice(0, 100)}`);
         }
         results.push({ uid, durMs: info.durMs, ...r });
       }
@@ -752,11 +760,34 @@ export async function startBot(botId) {
   }
   if (autoMute.enabled && autoMute.scanIntervalMinutes >= 5) {
     scanTimer = setInterval(
-      () => { void runActiveScan().catch((e) => log.warn("主动检查出错：" + e?.message)); },
+      () => { void runActiveScan().catch((e) => log.warn("定时巡查出错：" + e?.message)); },
       autoMute.scanIntervalMinutes * 60 * 1000,
     );
     scanTimer.unref?.();
-    log.info(`主动检查已开启：每 ${autoMute.scanIntervalMinutes} 分钟审查一次最近消息`);
+    log.info(`定时巡查已开启：每 ${autoMute.scanIntervalMinutes} 分钟审查一次最近消息`);
+  }
+
+  // ---- /巡查：查看定时巡查状态 ----
+  async function runScanStatus(ctx, msg) {
+    const target = msg.replyTarget;
+    if (target.scope !== "group") {
+      await safeSend(bot, target, "这个指令只能在群里使用。");
+      return;
+    }
+    const groupId = target.targetId;
+    const today = audit.getToday(groupId);
+    const checked = today.filter((e) => isReviewed(e.id)).length;
+    const punished = today.filter((e) => isPunished(e.id)).length;
+    const lines = [
+      "🔍 定时巡查状态",
+      `开关：${autoMute.enabled ? "已开启" : "未开启"}`,
+      `间隔：每 ${autoMute.scanIntervalMinutes} 分钟`,
+      `今日收录消息：${today.length} 条`,
+      `已检查：${checked} 条（剩余未检查 ${today.length - checked} 条）`,
+      `已禁言处理：${punished} 条`,
+      `上次巡查：${lastScanAt ? new Date(lastScanAt).toLocaleString("zh-CN", { hour12: false }) : "尚未执行"}`,
+    ];
+    await safeSend(bot, target, lines.join("\n"));
   }
 
   // ---- /群分析：结合人设与规定（知识库）分析今日群聊并给出建议 ----
