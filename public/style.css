@@ -130,6 +130,12 @@ select { width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid #d8d
 .price-table td:first-child { font-weight: 600; white-space: nowrap; }
 .price-table td { line-height: 1.5; }
 .prices-wide { width: 560px; }
+.promo-banner { background: linear-gradient(135deg, #fff7e6, #ffe4e6); border: 1px dashed #f97316; color: #c2410c; font-weight: 700; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; text-align: center; font-size: 14px; line-height: 1.5; }
+.promo-banner b { color: #dc2626; font-size: 16px; }
+.price-old { text-decoration: line-through; color: #9ca3af; font-size: 12px; margin-right: 5px; }
+.price-new { color: #dc2626; font-weight: 700; }
+.promo-row { background: #fffbf0; }
+.promo-row td { border-color: #fde68a !important; }
 .qline { font-size: 13px; color: #2563eb; margin-bottom: 10px; }
 #forgot-step1 button, #forgot-step2 button { margin-top: 10px; width: 100%; }
 /* ---- v0.8 UI 优化 ---- */
