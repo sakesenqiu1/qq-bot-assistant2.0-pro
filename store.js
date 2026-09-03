@@ -166,6 +166,7 @@ export function genId() { return crypto.randomUUID().replace(/-/g, "").slice(0, 
 export const PLANS = {
   free: { name: "免费版", botQuota: 1 },
   monthly: { name: "月卡", botQuota: 5 },
+  quarterly: { name: "季卡", botQuota: 5 },
   lifetime: { name: "买断", botQuota: 999 },
 };
 

@@ -124,6 +124,12 @@ select { width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid #d8d
 .help-content h4 { margin: 14px 0 4px; font-size: 14px; color: #24292f; }
 .help-content p { font-size: 13px; color: #4b5563; line-height: 1.7; }
 .modal-card.small { width: 420px; }
+.price-table { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 13px; }
+.price-table th, .price-table td { border: 1px solid #e5e7eb; padding: 9px 10px; text-align: left; }
+.price-table th { background: #f3f4f6; color: #374151; font-weight: 600; }
+.price-table td:first-child { font-weight: 600; white-space: nowrap; }
+.price-table td { line-height: 1.5; }
+.prices-wide { width: 560px; }
 .qline { font-size: 13px; color: #2563eb; margin-bottom: 10px; }
 #forgot-step1 button, #forgot-step2 button { margin-top: 10px; width: 100%; }
 /* ---- v0.8 UI 优化 ---- */

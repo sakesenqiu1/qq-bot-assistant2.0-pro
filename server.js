@@ -53,7 +53,7 @@ function passwordStrength(pw) {
 }
 
 function effectivePlan(user) {
-  if (user.plan === "monthly" && user.plan_expires_at < Date.now()) return PLANS.free;
+  if ((user.plan === "monthly" || user.plan === "quarterly") && user.plan_expires_at < Date.now()) return PLANS.free;
   return PLANS[user.plan] ?? PLANS.free;
 }
 
@@ -255,8 +255,9 @@ app.post("/api/admin/users/:id/plan", auth, adminOnly, (req, res) => {
   const plan = String(req.body?.plan ?? "");
   if (!PLANS[plan]) return res.status(400).json({ error: "无效的计划" });
   let expiresAt = 0;
-  if (plan === "monthly") {
-    const days = Number(req.body?.days ?? 30) || 30;
+  if (plan === "monthly" || plan === "quarterly") {
+    const defaultDays = plan === "quarterly" ? 91 : 30;
+    const days = Number(req.body?.days ?? defaultDays) || defaultDays;
     expiresAt = Date.now() + days * 24 * 3600 * 1000;
   }
   Users.setPlan(req.params.id, plan, expiresAt);
@@ -342,7 +343,7 @@ app.post("/api/redeem", auth, (req, res) => {
   if (!rc || !rc.enabled || rc.used_at > 0) return res.status(400).json({ error: "卡密无效或已被使用" });
   let plan = rc.type;
   let expiresAt = 0;
-  if (rc.type === "monthly") {
+  if (rc.type === "monthly" || rc.type === "quarterly") {
     const base = Math.max(Number(req.user.plan_expires_at) || 0, Date.now());
     expiresAt = base + Number(rc.days || 30) * 24 * 3600 * 1000;
   } else if (rc.type === "lifetime") {
@@ -359,8 +360,9 @@ app.get("/api/admin/redeems", auth, adminOnly, (req, res) => {
 });
 app.post("/api/admin/redeems", auth, adminOnly, (req, res) => {
   const count = Math.min(50, Math.max(1, Number(req.body?.count ?? 1) || 1));
-  const type = req.body?.type === "lifetime" ? "lifetime" : "monthly";
-  const days = Number(req.body?.days ?? 30) || 30;
+  const type = req.body?.type === "lifetime" ? "lifetime" : req.body?.type === "quarterly" ? "quarterly" : "monthly";
+  const defaultDays = type === "quarterly" ? 91 : 30;
+  const days = Number(req.body?.days ?? defaultDays) || defaultDays;
   const created = [];
   for (let i = 0; i < count; i++) {
     const code = "R" + crypto.randomBytes(4).toString("hex").toUpperCase();

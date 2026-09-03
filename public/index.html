@@ -44,6 +44,7 @@
       <div class="left">
         <div class="brand">QQ 机器人托管平台</div>
         <button id="btn-help" class="btn ghost">使用说明</button>
+        <button id="btn-prices" class="btn ghost">价目表</button>
         <button id="btn-admin" class="btn ghost hidden">后台管理</button>
       </div>
       <div class="right">
@@ -113,8 +114,23 @@
       <h4>二、创建机器人</h4><p>点击「＋ 新建机器人」，填写 QQ AppID / AppSecret（q.qq.com 注册机器人获取）、AI 接口地址与 Key、人设与规定。</p>
       <h4>三、与机器人聊天</h4><p>私聊直接对话；群里 @机器人 对话。指令：/帮助 /重置 /人格 /模型 /ping /查违规 /群分析。</p>
       <h4>四、群规审查与自动禁言</h4><p>可开启关键词自动注意、自动禁言（三级力度）、主动检查。/查违规 按你写的「机器人规定」优先判定。</p>
-      <h4>五、会员</h4><p>免费版 1 个机器人；月卡 5 个；买断不限量。在「会员中心」输入充值卡密即可自动开通。</p>
+      <h4>五、会员</h4><p>免费版 1 个机器人；月卡/季卡 5 个；买断不限量。在「会员中心」输入充值卡密即可自动开通，套餐详情见「价目表」。</p>
     </div>
+  </div></div>
+
+  <!-- 价目表弹窗 -->
+  <div id="prices-modal" class="modal hidden"><div class="modal-card prices-wide">
+    <div class="modal-head"><h3>价目表</h3><button id="prices-close" class="btn ghost">✕</button></div>
+    <table class="price-table">
+      <thead><tr><th>等级</th><th>天数</th><th>机器人数量</th><th>权限</th></tr></thead>
+      <tbody>
+        <tr><td>免费版</td><td>永久</td><td>1 个</td><td>全部基础功能：AI 聊天、自定义人设、群规审查、定时巡查、自动禁言</td></tr>
+        <tr><td>月卡</td><td>30 天</td><td>5 个</td><td>基础功能全开，可同时管理多个机器人</td></tr>
+        <tr><td>季卡</td><td>91 天</td><td>5 个</td><td>与月卡同权限，一次买 91 天更划算</td></tr>
+        <tr><td>买断</td><td>永久</td><td>不限量</td><td>全部功能终身可用，机器人数量无上限</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">开通方式：会员中心输入充值卡密自动开通（卡密由管理员发放）。所有等级均享全部聊天与群管功能，差别只在机器人数量。</p>
   </div></div>
 
   <!-- 会员中心弹窗 -->

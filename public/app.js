@@ -24,7 +24,7 @@ async function api(path, options = {}) {
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-const PLAN_NAME = { free: "免费版", monthly: "月卡", lifetime: "买断" };
+const PLAN_NAME = { free: "免费版", monthly: "月卡", quarterly: "季卡", lifetime: "买断" };
 const fmtTime = (ts) => (ts ? new Date(ts).toLocaleString("zh-CN") : "—");
 
 // ============ 验证码 ============
@@ -260,13 +260,17 @@ $("#bot-form").onsubmit = async (e) => {
 $("#btn-help").onclick = () => $("#help-modal").classList.remove("hidden");
 $("#help-close").onclick = () => $("#help-modal").classList.add("hidden");
 
+// ============ 价目表 ============
+$("#btn-prices").onclick = () => $("#prices-modal").classList.remove("hidden");
+$("#prices-close").onclick = () => $("#prices-modal").classList.add("hidden");
+
 // ============ 会员中心 ============
 $("#btn-member").onclick = async () => {
   $("#member-modal").classList.remove("hidden");
   setMsg("#m-msg", "");
   const m = await api("/api/me");
   $("#m-plan").textContent = PLAN_NAME[m.plan] || "免费版";
-  $("#m-expire").textContent = m.plan === "monthly" ? "到期时间：" + fmtTime(m.planExpiresAt) : "";
+  $("#m-expire").textContent = (m.plan === "monthly" || m.plan === "quarterly") ? "到期时间：" + fmtTime(m.planExpiresAt) : "";
 };
 $("#member-close").onclick = () => $("#member-modal").classList.add("hidden");
 $("#m-redeem").onclick = async () => {
@@ -339,11 +343,12 @@ async function loadAdminUsers() {
       <td>${esc(u.username)}</td>
       <td>${u.role === "admin" ? "管理员" : "用户"}</td>
       <td>${u.status === "active" ? "正常" : "禁用"}</td>
-      <td>${PLAN_NAME[u.plan] || "免费版"}${u.plan === "monthly" ? "（至" + fmtTime(u.planExpiresAt) + "）" : ""}</td>
+      <td>${PLAN_NAME[u.plan] || "免费版"}${(u.plan === "monthly" || u.plan === "quarterly") ? "（至" + fmtTime(u.planExpiresAt) + "）" : ""}</td>
       <td>${u.botCount}</td>
       <td>${fmtTime(u.createdAt)}</td>
       <td class="opts">
         <button class="btn" onclick="adminPlan('${u.id}','monthly')">发月卡</button>
+        <button class="btn" onclick="adminPlan('${u.id}','quarterly')">发季卡</button>
         <button class="btn" onclick="adminPlan('${u.id}','lifetime')">发买断</button>
         <button class="btn" onclick="adminPlan('${u.id}','free')">回收会员</button>
         <button class="btn ${u.status === "active" ? "danger" : "success"}" onclick="adminStatus('${u.id}','${u.status === "active" ? "disabled" : "active"}')">${u.status === "active" ? "禁用" : "启用"}</button>
@@ -387,8 +392,12 @@ async function loadAdminInvites() {
 }
 window.adminPlan = async (id, plan) => {
   try {
-    let days = 30;
-    if (plan === "monthly") { days = Number(prompt("月卡天数（默认30）：", "30")) || 30; }
+    const def = plan === "quarterly" ? 91 : 30;
+    let days = def;
+    if (plan === "monthly" || plan === "quarterly") {
+      const label = plan === "quarterly" ? "季卡天数（默认91）：" : "月卡天数（默认30）：";
+      days = Number(prompt(label, def)) || def;
+    }
     await api(`/api/admin/users/${id}/plan`, { method: "POST", body: JSON.stringify({ plan, days }) });
     loadAdminUsers();
   } catch (e) { alert(e.message); }
@@ -402,14 +411,14 @@ async function loadAdminRedeems() {
   $("#admin-table").innerHTML = `
     <div class="invite-gen">
       <input id="rc-count" type="number" value="5" min="1" max="50"> 个
-      <select id="rc-type"><option value="monthly">月卡</option><option value="lifetime">买断</option></select>
-      <input id="rc-days" type="number" value="30" min="1"> 天（月卡有效）
+      <select id="rc-type"><option value="monthly">月卡</option><option value="quarterly">季卡</option><option value="lifetime">买断</option></select>
+      <input id="rc-days" type="number" value="30" min="1"> 天（月卡/季卡有效）
       <button class="btn primary" id="rc-gen-btn">生成卡密</button>
     </div>
     <table><thead><tr><th>卡密</th><th>类型</th><th>天数</th><th>状态</th><th>使用者</th><th>使用时间</th><th>操作</th></tr></thead><tbody>
     ${list.map((r) => `<tr>
       <td><code>${esc(r.code)}</code></td>
-      <td>${r.type === "lifetime" ? "买断" : "月卡"}</td>
+      <td>${r.type === "lifetime" ? "买断" : r.type === "quarterly" ? "季卡" : "月卡"}</td>
       <td>${r.type === "lifetime" ? "—" : r.days}</td>
       <td>${r.enabled ? (r.used_at ? "已使用" : "可用") : "已禁用"}</td>
       <td>${esc(r.usedByName || "")}</td><td>${r.used_at ? fmtTime(r.used_at) : "—"}</td>
@@ -417,9 +426,13 @@ async function loadAdminRedeems() {
         <button class="btn" onclick="adminToggleRedeem('${r.code}')">${r.enabled ? "禁用" : "启用"}</button>
         <button class="btn danger" onclick="adminDelRedeem('${r.code}')">删除</button>
       </td></tr>`).join("")}</tbody></table>`;
+  $("#rc-type").onchange = () => { $("#rc-days").value = $("#rc-type").value === "quarterly" ? 91 : 30; };
   $("#rc-gen-btn").onclick = async () => {
     try {
-      const d = await api("/api/admin/redeems", { method: "POST", body: JSON.stringify({ count: Number($("#rc-count").value) || 1, type: $("#rc-type").value, days: Number($("#rc-days").value) || 30 }) });
+      const type = $("#rc-type").value;
+      const def = type === "quarterly" ? 91 : 30;
+      const days = Number($("#rc-days").value) || def;
+      const d = await api("/api/admin/redeems", { method: "POST", body: JSON.stringify({ count: Number($("#rc-count").value) || 1, type, days }) });
       alert("已生成充值卡密：\n" + d.created.join("\n"));
       loadAdminRedeems();
     } catch (e) { alert(e.message); }
