@@ -117,6 +117,7 @@ const BARE_COMMAND_WORDS = new Set([
   "ping",
   "xuncha", "巡查", "巡查状态",
   "check", "查违规", "违规检查", "群规检查", "公示",
+  "stats", "统计", "群统计", "违规统计",
   "analysis", "分析", "群分析", "建议", "群建议",
 ]);
 
@@ -323,6 +324,69 @@ export async function startBot(botId) {
     return Boolean(id) && reviewedMap.has(id);
   }
 
+  // 违规记录账本：每条被判违规的言论存底（保留 35 天），供 /群统计 使用
+  const violationsFile = path.join(ROOT, "data", "violations", botId + ".json");
+  const violationsMap = new Map(); // 条目id -> 违规记录
+  try {
+    if (existsSync(violationsFile)) {
+      const arr = JSON.parse(readFileSync(violationsFile, "utf8"));
+      const cutoff = Date.now() - 35 * 24 * 3600 * 1000;
+      for (const item of arr ?? []) {
+        if (item && item.entryId && item.ts >= cutoff) violationsMap.set(String(item.entryId), item);
+      }
+    }
+  } catch {}
+  let violationsDirty = false;
+  let violationsTimer = null;
+  function saveViolations() {
+    if (!violationsDirty) return;
+    const cutoff = Date.now() - 35 * 24 * 3600 * 1000;
+    for (const [id, v] of violationsMap) if (v.ts < cutoff) violationsMap.delete(id);
+    try {
+      mkdirSync(path.dirname(violationsFile), { recursive: true });
+      writeFileSync(violationsFile, JSON.stringify([...violationsMap.values()]), "utf8");
+      violationsDirty = false;
+    } catch (err) {
+      log.warn("保存违规记录失败：" + err?.message);
+    }
+  }
+  function scheduleViolationsSave() {
+    if (violationsTimer) clearTimeout(violationsTimer);
+    violationsTimer = setTimeout(() => saveViolations(), 1500);
+    violationsTimer.unref?.();
+  }
+  function recordViolations(groupId, vios, entries) {
+    let changed = false;
+    for (const item of vios) {
+      const entry = item.entryId ? entries.find((e) => e.id === item.entryId) : findEntryByEvidence(entries, item?.evidence);
+      if (!entry || !entry.id) continue;
+      if (violationsMap.has(entry.id)) continue; // 同一条言论不重复记账
+      violationsMap.set(entry.id, {
+        entryId: entry.id,
+        groupId,
+        uid: entry.uid,
+        user: entry.user,
+        type: item?.type ?? "违规",
+        severity: item?.severity ?? "中",
+        ts: Date.now(),
+        evidence: String(item?.evidence ?? entry.content ?? "").slice(0, 50),
+      });
+      changed = true;
+    }
+    if (changed) {
+      violationsDirty = true;
+      scheduleViolationsSave();
+    }
+  }
+  function statsViolations(groupId, sinceMs) {
+    const rows = [];
+    for (const v of violationsMap.values()) {
+      if (v.groupId !== groupId || v.ts < sinceMs) continue;
+      rows.push(v);
+    }
+    return rows;
+  }
+
   const llm = new LlmClient(record.llm ?? {}, log);
   const bot = new QQBot({ appId: record.qq.appId, appSecret: record.qq.appSecret, logger: log });
   const systemPrompt = buildSystemPrompt(record);
@@ -402,6 +466,7 @@ export async function startBot(botId) {
     "/ping   检查机器人状态",
     "/查违规 审查今天群内消息并公示（仅群聊）",
     "/巡查   查看定时巡查状态（仅群聊）",
+    "/群统计 查看近 30 天群成员违规次数统计（仅群聊）",
     "/群分析 结合人设与群规分析今日群聊，给出管理建议（仅群聊）",
     "提示：指令不带 / 也能用，直接发「查违规」即可",
   ].join("\n");
@@ -581,6 +646,13 @@ export async function startBot(botId) {
         await runAuditCheck(ctx, msg);
         return true;
       }
+      case "stats":
+      case "统计":
+      case "群统计":
+      case "违规统计": {
+        await runGroupStats(ctx, msg);
+        return true;
+      }
       case "analysis":
       case "分析":
       case "群分析":
@@ -668,6 +740,9 @@ export async function startBot(botId) {
         allVios.push(item);
       }
     }
+
+    // 违规存档（供 /群统计），与是否禁言无关
+    recordViolations(groupId, allVios, recent);
 
     // 自动禁言：按力度对本次新发现的违规者执行
     const muteResults = [];
@@ -790,6 +865,8 @@ export async function startBot(botId) {
           allVios.push(item);
         }
       }
+      // 违规存档（供 /群统计），与是否禁言无关
+      recordViolations(groupId, allVios, entries);
       // 无违规：也要报平安
       if (allVios.length === 0) {
         markReviewed(entries.map((e) => e.id));
@@ -843,12 +920,22 @@ export async function startBot(botId) {
     }
   }
   if (autoMute.enabled && autoMute.scanIntervalMinutes >= 5) {
-    scanTimer = setInterval(
-      () => { void runActiveScan().catch((e) => log.warn("定时巡查出错：" + e?.message)); },
-      autoMute.scanIntervalMinutes * 60 * 1000,
-    );
-    scanTimer.unref?.();
-    log.info(`定时巡查已开启：每 ${autoMute.scanIntervalMinutes} 分钟审查一次最近消息`);
+    // 按整点对齐排班（如 10 分钟档固定 :00/:10/:20… 执行），重启不会推迟或重置巡查节奏
+    function msToNextScan() {
+      const iv = autoMute.scanIntervalMinutes * 60 * 1000;
+      const now = Date.now();
+      const next = Math.ceil(now / iv) * iv;
+      return Math.max(next - now, 1000);
+    }
+    function scheduleScan() {
+      scanTimer = setTimeout(() => {
+        void runActiveScan().catch((e) => log.warn("定时巡查出错：" + e?.message));
+        scheduleScan(); // 每轮结束后按整点重新对齐下一次
+      }, msToNextScan());
+      scanTimer.unref?.();
+    }
+    scheduleScan();
+    log.info(`定时巡查已开启：每 ${autoMute.scanIntervalMinutes} 分钟按整点巡查一次（重启不影响节奏）`);
   }
 
   // ---- /巡查：查看定时巡查状态 ----
@@ -862,15 +949,54 @@ export async function startBot(botId) {
     const today = audit.getToday(groupId);
     const checked = today.filter((e) => isReviewed(e.id)).length;
     const punished = today.filter((e) => isPunished(e.id)).length;
+    const nextTs = Math.ceil(Date.now() / (autoMute.scanIntervalMinutes * 60 * 1000)) * (autoMute.scanIntervalMinutes * 60 * 1000);
     const lines = [
       "🔍 定时巡查状态",
       `开关：${autoMute.enabled ? "已开启" : "未开启"}`,
-      `间隔：每 ${autoMute.scanIntervalMinutes} 分钟`,
+      `间隔：每 ${autoMute.scanIntervalMinutes} 分钟（按整点对齐，重启不重置）`,
       `今日收录消息：${today.length} 条`,
       `已检查：${checked} 条（剩余未检查 ${today.length - checked} 条）`,
       `已禁言处理：${punished} 条`,
       `上次巡查：${lastScanAt ? new Date(lastScanAt).toLocaleString("zh-CN", { hour12: false }) : "尚未执行"}`,
+      `下次巡查：${new Date(nextTs).toLocaleString("zh-CN", { hour12: false })}`,
     ];
+    await safeSend(bot, target, lines.join("\n"));
+  }
+
+  // ---- /群统计：近 30 天群成员违规次数统计 ----
+  async function runGroupStats(ctx, msg) {
+    const target = msg.replyTarget;
+    if (target.scope !== "group") {
+      await safeSend(bot, target, "这个指令只能在群里使用。");
+      return;
+    }
+    const groupId = target.targetId;
+    const since = Date.now() - 30 * 24 * 3600 * 1000;
+    const rows = statsViolations(groupId, since);
+    if (rows.length === 0) {
+      await safeSend(bot, target, "📊 近 30 天群违规统计\n本群暂未记录到任何违规，群风良好 ✅");
+      return;
+    }
+    // 按人聚合：次数 + 违规类型明细
+    const byUid = new Map();
+    for (const v of rows) {
+      const key = v.uid || "?";
+      if (!byUid.has(key)) byUid.set(key, { user: v.user ?? "未知", total: 0, types: new Map() });
+      const u = byUid.get(key);
+      u.total += 1;
+      const t = v.type ?? "违规";
+      u.types.set(t, (u.types.get(t) ?? 0) + 1);
+    }
+    const people = [...byUid.values()].sort((a, b) => b.total - a.total);
+    const lines = [
+      `📊 近 30 天群违规统计（共 ${people.length} 人 ${rows.length} 次）`,
+      "排名｜昵称｜次数｜违规类型",
+    ];
+    people.slice(0, 30).forEach((u, i) => {
+      const types = [...u.types.entries()].map(([t, n]) => `${t}×${n}`).join("、");
+      lines.push(`${i + 1}｜${String(u.user).slice(0, 12)}｜${u.total}｜${types}`);
+    });
+    if (people.length > 30) lines.push(`……其余 ${people.length - 30} 人未列出`);
     await safeSend(bot, target, lines.join("\n"));
   }
 
